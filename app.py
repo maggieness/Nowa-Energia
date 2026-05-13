@@ -730,6 +730,57 @@ def mark_emergency_source(plan_df):
     return marked_df
 
 
+def get_emergency_mask(plan_df):
+    if plan_df is None or plan_df.empty:
+        return pd.Series(False, index=plan_df.index if plan_df is not None else None)
+    marked_df = mark_emergency_source(plan_df)
+    return marked_df["Źródło"].astype(str).str.lower() == "awaria"
+
+
+def format_emergency_option(row):
+    date_value = pd.to_datetime(row.get("data"), errors="coerce")
+    date_label = date_value.strftime("%Y-%m-%d") if not pd.isna(date_value) else "bez daty"
+    task_id = row.get("id_zadania", "brak ID")
+    task_name = str(row.get("nazwa_zadania", "Awaria")).strip()
+    if len(task_name) > 80:
+        task_name = f"{task_name[:77]}..."
+    return f"{date_label} | {task_id} | {task_name}"
+
+
+def approve_emergency_rows(row_indices):
+    results = st.session_state.get("schedule_results")
+    if results is None:
+        return 0
+
+    plan_df = ensure_execution_status(results.get("plan", pd.DataFrame()))
+    valid_indices = [idx for idx in row_indices if idx in plan_df.index]
+    if not valid_indices:
+        return 0
+
+    plan_df.loc[valid_indices, "status"] = "Zatwierdzony"
+    results["plan"] = plan_df
+
+    emergency_mask = get_emergency_mask(plan_df)
+    pending_emergency_mask = emergency_mask & (plan_df["status"].astype(str) != "Zatwierdzony")
+    st.session_state["rdm_changes_pending_approval"] = bool(pending_emergency_mask.any())
+    sync_approval_from_plan_status(plan_df)
+
+    log_entry = pd.DataFrame([{
+        "id_zadania": None,
+        "etap": "Akceptacja awarii RDM",
+        "decyzja": f"Zatwierdzono awarie RDM: {len(valid_indices)} pozycji",
+        "uzasadnienie": "Decyzja kierownika wykonawstwa po weryfikacji zmian z rejestru awarii.",
+        "data_czas_logu": datetime.now(),
+    }])
+    results["log"] = pd.concat(
+        [results.get("log", pd.DataFrame()), log_entry],
+        ignore_index=True,
+    )
+    st.session_state["schedule_results"] = results
+    save_current_results_to_excel()
+    return len(valid_indices)
+
+
 def get_emergency_tasks(plan_df):
     if plan_df is None or plan_df.empty:
         return pd.DataFrame()
@@ -1771,6 +1822,48 @@ elif active_page == "Zarządzanie Harmonogramem":
                     st.success("Zatwierdzenie oznacza decyzję kierownika wykonawstwa. System nie podejmuje decyzji operacyjnej samodzielnie.")
                     st.rerun()
 
+            emergency_mask = get_emergency_mask(plan_df)
+            emergency_rows = plan_df[emergency_mask].copy()
+            if not emergency_rows.empty:
+                if "data" in emergency_rows.columns:
+                    emergency_rows["data"] = pd.to_datetime(emergency_rows["data"], errors="coerce")
+                    emergency_rows = emergency_rows.sort_values(
+                        [column for column in ["data", "priorytet", "id_zadania"] if column in emergency_rows.columns],
+                        kind="stable",
+                    )
+
+                with st.expander("Awarie RDM do akceptacji", expanded=st.session_state.get("rdm_changes_pending_approval", False)):
+                    st.write("Awarie dodane z rejestru RDM są oznaczone na czerwono. Możesz zaakceptować wszystkie naraz albo wybrane pozycje.")
+                    show_plan_grid(emergency_rows)
+
+                    pending_emergency_rows = emergency_rows[emergency_rows["status"].astype(str) != "Zatwierdzony"] if "status" in emergency_rows.columns else emergency_rows
+                    if pending_emergency_rows.empty:
+                        st.success("Wszystkie awarie RDM w harmonogramie są zatwierdzone.")
+                    else:
+                        option_pairs = [
+                            (f"{format_emergency_option(row)} [{idx}]", idx)
+                            for idx, row in pending_emergency_rows.iterrows()
+                        ]
+                        option_labels = [label for label, _ in option_pairs]
+                        option_to_index = dict(option_pairs)
+
+                        bulk_cols = st.columns([2, 2, 3])
+                        if bulk_cols[0].button("Zatwierdź wszystkie awarie RDM", use_container_width=True):
+                            approved_count = approve_emergency_rows(list(pending_emergency_rows.index))
+                            st.success(f"Zatwierdzono awarie RDM: {approved_count}.")
+                            st.rerun()
+
+                        selected_labels = st.multiselect(
+                            "Wybierz jedną lub wiele awarii do zatwierdzenia",
+                            option_labels,
+                            key="selected_rdm_emergencies_to_approve",
+                        )
+                        selected_indices = [option_to_index[label] for label in selected_labels]
+                        if st.button("Zatwierdź wybrane awarie RDM", disabled=not selected_indices, use_container_width=True):
+                            approved_count = approve_emergency_rows(selected_indices)
+                            st.success(f"Zatwierdzono wybrane awarie RDM: {approved_count}.")
+                            st.rerun()
+
             with st.expander("Edytuj harmonogram", expanded=True):
                 st.write("Zmień wartości w tabeli i kliknij Zapisz zmiany w harmonogramie.")
                 editable_plan = filter_plan_table(plan_df, "schedule_edit")
@@ -1816,6 +1909,9 @@ elif active_page == "Zarządzanie Harmonogramem":
 
                     st.session_state["schedule_results"]["plan"] = edited_plan
                     sync_approval_from_plan_status(edited_plan)
+                    emergency_mask = get_emergency_mask(edited_plan)
+                    pending_emergency_mask = emergency_mask & (edited_plan["status"].astype(str) != "Zatwierdzony")
+                    st.session_state["rdm_changes_pending_approval"] = bool(pending_emergency_mask.any())
                     if "log" in st.session_state["schedule_results"]:
                         log_entry = pd.DataFrame([{
                             "id_zadania": None,

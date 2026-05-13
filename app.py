@@ -912,6 +912,13 @@ st.markdown("""
         font-size: 0 !important;
     }
 
+    [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button svg,
+    [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button [class*="icon"],
+    [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button [data-testid*="icon"] {
+        display: none !important;
+        visibility: hidden !important;
+    }
+
     [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button::after {
         content: "Wgraj";
         color: #31263d;

@@ -1082,6 +1082,15 @@ def get_emergency_mask(plan_df):
     return marked_df["Źródło"].astype(str).str.lower() == "awaria"
 
 
+def make_schedule_row_keys(plan_df):
+    if plan_df is None or plan_df.empty:
+        return pd.Series(dtype=str)
+    ids = plan_df.get("id_zadania", pd.Series("", index=plan_df.index)).fillna("").astype(str)
+    parts = plan_df.get("czesc_zadania", pd.Series("", index=plan_df.index)).fillna("").astype(str)
+    indexes = pd.Series(plan_df.index, index=plan_df.index).fillna("").astype(str)
+    return ids + "|" + parts + "|" + indexes
+
+
 def approve_emergency_rows(row_indices):
     results = st.session_state.get("schedule_results")
     if results is None:
@@ -2278,7 +2287,8 @@ elif active_page == "Zarządzanie Harmonogramem":
                         "Zaznacz wszystkie awarie",
                         key=f"select_all_rdm_emergencies_{st.session_state['schedule_editor_version']}",
                     )
-                editable_plan.insert(0, "Dodaj", False)
+                editable_plan["_row_key"] = make_schedule_row_keys(editable_plan)
+                editable_plan.insert(0, "Dodaj", emergency_mask & (editable_plan["status"].astype(str) == "Zatwierdzony"))
                 editable_plan.insert(1, "RDM", emergency_mask.map({True: "AWARIA RDM", False: ""}))
                 if select_all_emergencies:
                     editable_plan.loc[pending_emergency_mask, "Dodaj"] = True
@@ -2296,6 +2306,7 @@ elif active_page == "Zarządzanie Harmonogramem":
                             "Dodaj": st.column_config.CheckboxColumn("Dodaj", help="Zaznacz awarię RDM do dodania do harmonogramu"),
                             "RDM": st.column_config.TextColumn("RDM"),
                             "Źródło": st.column_config.TextColumn("Źródło"),
+                            "_row_key": None,
                             "data": st.column_config.DateColumn("data"),
                             "data_wymagana": st.column_config.DateColumn("data_wymagana"),
                             "zaplanowane_godziny": st.column_config.NumberColumn("zaplanowane_godziny", step=0.5),
@@ -2311,13 +2322,17 @@ elif active_page == "Zarządzanie Harmonogramem":
                     add_selected_emergencies = form_cols[1].form_submit_button("Dodaj do harmonogramu")
 
                 if save_schedule or add_selected_emergencies:
-                    selected_emergency_ids = []
-                    if "Dodaj" in edited_plan.columns and "id_zadania" in edited_plan.columns:
-                        selected_emergency_ids = edited_plan.loc[
-                            edited_plan["Dodaj"].fillna(False)
-                            & (edited_plan["Źródło"].astype(str).str.lower() == "awaria"),
-                            "id_zadania",
-                        ].tolist()
+                    selected_emergency_keys = set()
+                    visible_emergency_keys = set()
+                    if "Dodaj" in edited_plan.columns and "_row_key" in edited_plan.columns:
+                        edited_emergency_mask = edited_plan["Źródło"].astype(str).str.lower() == "awaria"
+                        visible_emergency_keys = set(edited_plan.loc[edited_emergency_mask, "_row_key"].dropna().astype(str))
+                        selected_emergency_keys = set(
+                            edited_plan.loc[
+                                edited_plan["Dodaj"].fillna(False) & edited_emergency_mask,
+                                "_row_key",
+                            ].dropna().astype(str)
+                        )
                     if "Dodaj" in edited_plan.columns:
                         edited_plan = edited_plan.drop(columns=["Dodaj"])
                     if "RDM" in edited_plan.columns:
@@ -2332,11 +2347,53 @@ elif active_page == "Zarządzanie Harmonogramem":
                         if column in edited_plan.columns:
                             edited_plan[column] = pd.to_numeric(edited_plan[column], errors="coerce")
                     edited_plan = ensure_execution_status(edited_plan)
+                    if "_row_key" not in edited_plan.columns:
+                        edited_plan["_row_key"] = make_schedule_row_keys(edited_plan)
 
-                    st.session_state["schedule_results"]["plan"] = edited_plan
-                    sync_approval_from_plan_status(edited_plan)
-                    emergency_mask = get_emergency_mask(edited_plan)
-                    pending_emergency_mask = emergency_mask & (edited_plan["status"].astype(str) != "Zatwierdzony")
+                    current_plan = ensure_execution_status(st.session_state["schedule_results"]["plan"]).copy()
+                    current_plan["_row_key"] = make_schedule_row_keys(current_plan)
+                    update_columns = [
+                        column for column in edited_plan.columns
+                        if column in current_plan.columns and column != "_row_key"
+                    ]
+                    for _, edited_row in edited_plan.dropna(subset=["_row_key"]).iterrows():
+                        row_key = str(edited_row["_row_key"])
+                        row_mask = current_plan["_row_key"].astype(str) == row_key
+                        for column in update_columns:
+                            current_plan.loc[row_mask, column] = edited_row[column]
+
+                    added_count = 0
+                    removed_count = 0
+                    if add_selected_emergencies:
+                        selected_mask = current_plan["_row_key"].astype(str).isin(selected_emergency_keys)
+                        current_plan.loc[selected_mask, "status"] = "Zatwierdzony"
+                        added_count = int(selected_mask.sum())
+
+                        unselected_emergency_keys = visible_emergency_keys - selected_emergency_keys
+                        remove_mask = current_plan["_row_key"].astype(str).isin(unselected_emergency_keys)
+                        removed_rows = current_plan.loc[remove_mask].drop(columns=["_row_key"], errors="ignore").copy()
+                        removed_count = len(removed_rows)
+                        if removed_count:
+                            removed_rows["powod_niezaplanowania"] = "Odznaczono checkbox Dodaj w edycji harmonogramu."
+                            removed_rows["rekomendowana_akcja"] = "Zaznacz Dodaj, jeśli awaria ma wrócić do harmonogramu."
+                            current_unplanned = st.session_state["schedule_results"].get("unplanned", pd.DataFrame()).copy()
+                            if "id_zadania" in current_unplanned.columns and "id_zadania" in removed_rows.columns:
+                                existing_unplanned_ids = set(current_unplanned["id_zadania"].fillna("").astype(str))
+                                removed_rows = removed_rows[
+                                    ~removed_rows["id_zadania"].fillna("").astype(str).isin(existing_unplanned_ids)
+                                ]
+                            if not removed_rows.empty:
+                                st.session_state["schedule_results"]["unplanned"] = pd.concat(
+                                    [current_unplanned, removed_rows],
+                                    ignore_index=True,
+                                )
+                            current_plan = current_plan.loc[~remove_mask].copy()
+
+                    current_plan = current_plan.drop(columns=["_row_key"], errors="ignore")
+                    st.session_state["schedule_results"]["plan"] = current_plan
+                    sync_approval_from_plan_status(current_plan)
+                    emergency_mask = get_emergency_mask(current_plan)
+                    pending_emergency_mask = emergency_mask & (current_plan["status"].astype(str) != "Zatwierdzony")
                     st.session_state["rdm_changes_pending_approval"] = bool(pending_emergency_mask.any())
                     if "log" in st.session_state["schedule_results"]:
                         log_entry = pd.DataFrame([{
@@ -2351,8 +2408,7 @@ elif active_page == "Zarządzanie Harmonogramem":
                         )
                     save_current_results_to_excel()
                     if add_selected_emergencies:
-                        approved_count = approve_emergency_task_ids(selected_emergency_ids)
-                        st.success(f"Dodano do harmonogramu awarie RDM: {approved_count}.")
+                        st.success(f"Dodano do harmonogramu awarie RDM: {added_count}. Odznaczono jako niezaplanowane: {removed_count}.")
                     else:
                         st.success("Harmonogram zapisany. Możesz go teraz sprawdzić i zatwierdzić.")
                     st.rerun()

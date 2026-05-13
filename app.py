@@ -1519,6 +1519,32 @@ st.markdown("""
         color: white;
     }
 
+    div[role="dialog"] .stButton > button {
+        background: linear-gradient(180deg, #efe6f5 0%, #decce8 100%) !important;
+        border: 1px solid #c9b1d5 !important;
+        color: #31263d !important;
+        font-weight: 800;
+    }
+
+    div[role="dialog"] .stButton > button *,
+    div[role="dialog"] .stButton > button p,
+    div[role="dialog"] .stButton > button span {
+        color: #31263d !important;
+        font-weight: 800 !important;
+    }
+
+    div[role="dialog"] .stButton > button:hover {
+        background: linear-gradient(180deg, #eadcf0 0%, #dbc7e4 100%) !important;
+        border-color: #bfa4ce !important;
+        color: #22192b !important;
+    }
+
+    div[role="dialog"] .stButton > button:hover *,
+    div[role="dialog"] .stButton > button:hover p,
+    div[role="dialog"] .stButton > button:hover span {
+        color: #22192b !important;
+    }
+
     .data-upload-card {
         background: transparent;
         border: 0;

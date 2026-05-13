@@ -971,6 +971,23 @@ st.markdown("""
         line-height: 1.15;
     }
 
+    [data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] .stButton > button {
+        background: linear-gradient(180deg, #fff9ff 0%, #f2e8f6 100%) !important;
+        border: 1px solid #d6c4df !important;
+        color: #31263d !important;
+        font-size: 0.86rem;
+        font-weight: 800;
+        min-height: 2.55rem;
+        padding: 0.55rem 0.7rem;
+        text-align: center;
+    }
+
+    [data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] .stButton > button:hover {
+        background: linear-gradient(180deg, #ffffff 0%, #eadff0 100%) !important;
+        border-color: #ead8f0 !important;
+        color: #22192b !important;
+    }
+
     .st-key-nav_menu {
         display: flex;
         flex-direction: column;

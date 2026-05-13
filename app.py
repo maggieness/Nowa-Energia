@@ -1661,8 +1661,10 @@ elif active_page == "Harmonogram":
     section_title("Harmonogram")
 
     if st.session_state["schedule_results"] is None:
-        st.info("Najpierw uruchom planowanie.")
-        render_run_planning_button("run_planning_from_empty_schedule")
+        st.info(
+            "Ta zakładka pokazuje wyłącznie ostateczny, zatwierdzony harmonogram. "
+            "Uruchom planowanie i zatwierdź wynik w zakładce „Zarządzanie Harmonogramem”."
+        )
     elif not st.session_state["approved"]:
         if st.session_state.get("rdm_changes_pending_approval", False):
             st.warning(
@@ -1676,7 +1678,6 @@ elif active_page == "Harmonogram":
                 "Zatwierdź wygenerowany harmonogram w zakładce „Zarządzanie harmonogramem”, "
                 "aby zobaczyć go tutaj."
             )
-        render_run_planning_button("run_planning_from_unapproved_schedule")
     else:
         st.session_state["schedule_results"]["plan"] = ensure_execution_status(st.session_state["schedule_results"]["plan"])
         plan_df = enrich_plan_addresses_from_input(st.session_state["schedule_results"]["plan"])
@@ -1691,9 +1692,6 @@ elif active_page == "Harmonogram":
                 "unplanned_count": len(st.session_state["schedule_results"].get("unplanned", pd.DataFrame())),
                 "conflict_count": len(st.session_state["schedule_results"].get("conflicts", pd.DataFrame())),
             }
-            download_cols = st.columns([4, 1])
-            with download_cols[1]:
-                render_schedule_excel_download()
             render_management_summary_cards(stats)
             metric_cols = st.columns(4)
             metric_cols[0].metric("Wykonane", len(plan_df[plan_df["status_wykonania"] == "Wykonane"]))
@@ -1705,7 +1703,11 @@ elif active_page == "Harmonogram":
             with metric_cols[3]:
                 render_status_badge("Zatwierdzony" if st.session_state["approved"] else "Rekomendowany")
 
-            st.subheader("Pełny harmonogram")
+            header_cols = st.columns([4, 1])
+            with header_cols[0]:
+                st.subheader("Pełny harmonogram")
+            with header_cols[1]:
+                render_schedule_excel_download()
             filtered_plan = filter_plan_table(plan_df, "schedule_full")
             show_plan_grid(filtered_plan)
 

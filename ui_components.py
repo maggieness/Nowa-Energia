@@ -64,7 +64,7 @@ def _emergency_mask(df):
 def _highlight_emergency_rows(row):
     if str(row.get("Źródło", "")).lower() != "awaria":
         return [""] * len(row)
-    return ["background-color: #f8e7f0; color: #302438; border-color: #ead0de;" for _ in row]
+    return ["background-color: #ffe4e6; color: #7f1d1d; border-color: #fecdd3; font-weight: 650;" for _ in row]
 
 
 def prepare_plan_view(df):

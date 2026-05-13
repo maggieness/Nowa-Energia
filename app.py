@@ -2322,6 +2322,11 @@ elif active_page == "Zarządzanie Harmonogramem":
                     add_selected_emergencies = form_cols[1].form_submit_button("Dodaj do harmonogramu")
 
                 if save_schedule or add_selected_emergencies:
+                    if "_row_key" not in edited_plan.columns:
+                        edited_plan["_row_key"] = editable_plan["_row_key"].reindex(edited_plan.index)
+                    if "Źródło" not in edited_plan.columns:
+                        edited_plan["Źródło"] = editable_plan["Źródło"].reindex(edited_plan.index)
+
                     selected_emergency_keys = set()
                     visible_emergency_keys = set()
                     if "Dodaj" in edited_plan.columns and "_row_key" in edited_plan.columns:

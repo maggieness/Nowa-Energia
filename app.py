@@ -467,6 +467,15 @@ def classify_rdm_report(uploaded_report):
     return classified
 
 
+def should_show_rdm_ai_notice():
+    classified = st.session_state.get("rdm_classification")
+    return (
+        classified is not None
+        and not classified.empty
+        and st.session_state.get("rdm_import_summary") is None
+    )
+
+
 def get_rdm_value(row, column, default=None):
     if column in row.index and not pd.isna(row[column]):
         return row[column]
@@ -893,6 +902,7 @@ st.markdown("""
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        position: relative;
         width: 100%;
         min-width: 0;
         max-width: 100%;
@@ -925,14 +935,21 @@ st.markdown("""
     }
 
     [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button::after {
+        align-items: center;
         content: "Wgraj";
         color: #31263d;
+        display: flex;
         font-size: 0.86rem;
         font-weight: 800;
+        inset: 0;
+        justify-content: center;
         line-height: 1.15;
-        margin: 0.08rem auto 0 auto;
+        margin: 0;
+        pointer-events: none;
+        position: absolute;
         text-align: center;
         width: 100%;
+        z-index: 2;
     }
 
     [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] *,
@@ -1618,11 +1635,14 @@ elif active_page == "Zarządzanie Harmonogramem":
 
             st.info(
                 "Harmonogram został wygenerowany przez AI i wymaga ręcznej weryfikacji. "
-                "Klasyfikacje awarii dodawane z raportu RDM również są rekomendacją AI. "
-                "Przed zaakceptowaniem ich w harmonogramie kierownik wykonawstwa musi zweryfikować poprawność klasyfikacji, "
-                "priorytetu, wymaganych kompetencji i terminu. Po sprawdzeniu danych zatwierdź harmonogram, "
-                "aby udostępnić jego finalny podgląd w zakładce Harmonogram."
+                "Po sprawdzeniu danych zatwierdź harmonogram, aby udostępnić jego finalny podgląd w zakładce Harmonogram."
             )
+            if should_show_rdm_ai_notice():
+                st.warning(
+                    "Klasyfikacje awarii dodawane z raportu RDM są rekomendacją AI. "
+                    "Przed zaakceptowaniem ich w harmonogramie kierownik wykonawstwa musi zweryfikować poprawność klasyfikacji, "
+                    "priorytetu, wymaganych kompetencji i terminu."
+                )
             if st.session_state["approved"]:
                 st.success("Harmonogram jest zatwierdzony. Wybierz zakładkę Harmonogram w menu, aby zobaczyć finalny podgląd.")
 
@@ -1723,20 +1743,17 @@ elif active_page == "Rejestr Awarii":
                         st.session_state["uploaded_emergency_report_meta"] = report_meta
                         classify_rdm_report(uploaded_emergency_report)
                         st.success(f"Raport awarii sklasyfikowany: {uploaded_emergency_report.name}")
-                        st.warning(
-                            "Klasyfikacja awarii została wykonana przez AI. "
-                            "Zanim zostanie zaakceptowana w harmonogramie, musi zostać zweryfikowana przez kierownika wykonawstwa."
-                        )
                     except Exception as exc:
                         st.error(f"Nie udało się sklasyfikować raportu RDM: {exc}")
 
             classified = st.session_state.get("rdm_classification")
             if classified is not None and not classified.empty:
-                st.warning(
-                    "Klasyfikacja awarii została wykonana przez AI. "
-                    "Przed importem do harmonogramu kierownik wykonawstwa powinien zweryfikować wynik klasyfikacji, "
-                    "priorytet, wymagane kompetencje oraz decyzję, czy awaria ma zostać dodana do planu."
-                )
+                if should_show_rdm_ai_notice():
+                    st.warning(
+                        "Klasyfikacja awarii została wykonana przez AI. "
+                        "Przed importem do harmonogramu kierownik wykonawstwa powinien zweryfikować wynik klasyfikacji, "
+                        "priorytet, wymagane kompetencje oraz decyzję, czy awaria ma zostać dodana do planu."
+                    )
                 summary_cols = st.columns(4)
                 summary_cols[0].metric("RDM rekordy", len(classified))
                 summary_cols[1].metric(

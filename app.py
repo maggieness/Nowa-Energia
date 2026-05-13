@@ -902,16 +902,15 @@ st.markdown("""
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        position: relative;
         width: 100%;
         min-width: 0;
         max-width: 100%;
         height: 2.55rem;
         min-height: 2.55rem;
-        background: linear-gradient(180deg, #fff9ff 0%, #f2e8f6 100%);
-        border: 1px solid #d6c4df;
+        background: linear-gradient(180deg, #eadcf0 0%, #dbc7e4 100%);
+        border: 1px solid #c9b1d5;
         border-radius: 7px;
-        color: transparent !important;
+        color: #31263d !important;
         font-size: 0;
         font-weight: 700;
         padding: 0.18rem 0.7rem 0.22rem 0.7rem;
@@ -935,21 +934,14 @@ st.markdown("""
     }
 
     [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button::after {
-        align-items: center;
         content: "Wgraj";
         color: #31263d;
-        display: flex;
         font-size: 0.86rem;
         font-weight: 800;
-        inset: 0;
-        justify-content: center;
         line-height: 1.15;
-        margin: 0;
-        pointer-events: none;
-        position: absolute;
+        margin: 0.08rem auto 0 auto;
         text-align: center;
         width: 100%;
-        z-index: 2;
     }
 
     [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] *,

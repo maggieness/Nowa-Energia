@@ -48,36 +48,31 @@ def render_data_upload(file_key, label, target_filename, file_types, on_upload=N
     safe_label = escape(label)
 
     with st.container(border=True):
-        info_col, action_col = st.columns([4.15, 1.25], vertical_alignment="center")
-        with info_col:
-            if is_uploaded and not is_reuploading:
-                safe_file_name = escape(session_meta[file_key][0])
-                st.markdown(
-                    f"<div class='data-upload-card'><span>{safe_label} - wgrano</span><strong>{safe_file_name}</strong></div>",
-                    unsafe_allow_html=True,
-                )
-            else:
-                status_label = "Zmień plik" if is_reuploading else "Do wgrania"
-                st.markdown(
-                    f"<div class='data-upload-card data-upload-card--pending'><span>{safe_label}</span><strong>{status_label}</strong></div>",
-                    unsafe_allow_html=True,
-                )
-
-        with action_col:
-            if is_uploaded and not is_reuploading:
-                if st.button("Zmień", key=f"reupload_{file_key}", help="Wgraj ponownie", use_container_width=True):
-                    upload_modes[file_key] = True
-                    upload_versions[file_key] = upload_versions.get(file_key, 0) + 1
-                    st.rerun()
-                return
-
-            uploaded_file = st.file_uploader(
-                "Wgraj plik",
-                type=file_types,
-                key=f"{file_key}_upload_{upload_versions.get(file_key, 0)}",
-                help=f"Wgraj plik: {label}",
-                label_visibility="collapsed",
+        if is_uploaded and not is_reuploading:
+            safe_file_name = escape(session_meta[file_key][0])
+            st.markdown(
+                f"<div class='data-upload-card'><span>{safe_label} - wgrano</span><strong>{safe_file_name}</strong></div>",
+                unsafe_allow_html=True,
             )
+            if st.button("Zmień plik", key=f"reupload_{file_key}", help="Wgraj ponownie", use_container_width=True):
+                upload_modes[file_key] = True
+                upload_versions[file_key] = upload_versions.get(file_key, 0) + 1
+                st.rerun()
+            return
+
+        status_label = "Zmień plik" if is_reuploading else "Do wgrania"
+        st.markdown(
+            f"<div class='data-upload-card data-upload-card--pending'><span>{safe_label}</span><strong>{status_label}</strong></div>",
+            unsafe_allow_html=True,
+        )
+
+        uploaded_file = st.file_uploader(
+            "Wgraj plik",
+            type=file_types,
+            key=f"{file_key}_upload_{upload_versions.get(file_key, 0)}",
+            help=f"Wgraj plik: {label}",
+            label_visibility="collapsed",
+        )
     if uploaded_file is None:
         return
 
@@ -876,8 +871,16 @@ st.markdown("""
         border: 0;
         justify-content: center;
         min-height: 2.35rem;
+        min-width: 0;
         width: 100%;
         padding: 0;
+        box-sizing: border-box;
+    }
+
+    [data-testid="stSidebar"] [data-testid="stFileUploader"] {
+        width: 100%;
+        min-width: 0;
+        overflow: hidden;
     }
 
     [data-testid="stSidebar"] [data-testid="stFileUploaderDropzoneInstructions"],
@@ -934,15 +937,15 @@ st.markdown("""
     }
 
     [data-testid="stSidebar"] .stButton > button {
-        width: 2.35rem;
-        min-width: 2.35rem;
-        max-width: 2.35rem;
-        min-height: 2.35rem;
-        height: 2.35rem;
-        padding: 0;
-        border-radius: 999px;
-        font-size: 1rem;
-        line-height: 1;
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        min-height: 2.25rem;
+        height: auto;
+        padding: 0.45rem 0.55rem;
+        border-radius: 7px;
+        font-size: 0.8rem;
+        line-height: 1.15;
     }
 
     .st-key-nav_menu {
@@ -1084,7 +1087,8 @@ st.markdown("""
         border: 0;
         border-radius: 0;
         padding: 0;
-        margin: 0;
+        margin: 0 0 0.4rem 0;
+        min-width: 0;
     }
 
     .data-upload-card--pending {
@@ -1097,9 +1101,10 @@ st.markdown("""
         color: #fef7ff;
         font-size: 0.74rem;
         font-weight: 750;
-        line-height: 1;
+        line-height: 1.08;
         margin-bottom: 0.2rem;
         text-transform: uppercase;
+        overflow-wrap: anywhere;
     }
 
     .data-upload-card strong {
@@ -1111,6 +1116,7 @@ st.markdown("""
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        max-width: 100%;
     }
 
     .data-upload-session {

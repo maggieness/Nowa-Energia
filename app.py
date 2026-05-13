@@ -968,6 +968,12 @@ def mark_emergency_source(plan_df):
     return marked_df
 
 
+def highlight_emergency_editor_rows(row):
+    if str(row.get("Źródło", "")).lower() != "awaria":
+        return [""] * len(row)
+    return ["background-color: #ffe4e6; color: #7f1d1d; border-color: #fecdd3; font-weight: 650;" for _ in row]
+
+
 def get_emergency_mask(plan_df):
     if plan_df is None or plan_df.empty:
         return pd.Series(False, index=plan_df.index if plan_df is not None else None)
@@ -2219,10 +2225,11 @@ elif active_page == "Zarządzanie Harmonogramem":
                 if "data_wymagana" in editable_plan.columns:
                     editable_plan["data_wymagana"] = pd.to_datetime(editable_plan["data_wymagana"], errors="coerce")
                 editable_plan = mark_emergency_source(editable_plan)
+                styled_editable_plan = editable_plan.style.apply(highlight_emergency_editor_rows, axis=1)
 
                 with st.form("schedule_edit_form"):
                     edited_plan = st.data_editor(
-                        editable_plan,
+                        styled_editable_plan,
                         hide_index=True,
                         use_container_width=True,
                         num_rows="dynamic",

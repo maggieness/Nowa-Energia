@@ -857,7 +857,7 @@ st.markdown("""
     }
 
     [data-testid="stSidebar"] [data-testid="stExpanderDetails"] {
-        padding: 0.45rem 0.55rem 0.55rem 0.55rem;
+        padding: 0.7rem 0.75rem 1.25rem 0.75rem;
     }
 
     [data-testid="stSidebar"] [data-testid="stExpander"] summary {
@@ -870,10 +870,10 @@ st.markdown("""
         background: transparent;
         border: 0;
         justify-content: center;
-        min-height: 2.35rem;
+        min-height: 2.9rem;
         min-width: 0;
         width: 100%;
-        padding: 0;
+        padding: 0.18rem 0 0.08rem 0;
         box-sizing: border-box;
     }
 
@@ -896,15 +896,15 @@ st.markdown("""
         width: 100%;
         min-width: 0;
         max-width: 100%;
-        height: 2.25rem;
-        min-height: 2.25rem;
+        height: 2.55rem;
+        min-height: 2.55rem;
         background: linear-gradient(180deg, #fff9ff 0%, #f2e8f6 100%);
         border: 1px solid #d6c4df;
         border-radius: 7px;
         color: transparent !important;
         font-size: 0;
         font-weight: 700;
-        padding: 0;
+        padding: 0.18rem 0.7rem 0.22rem 0.7rem;
     }
 
     [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button * {
@@ -917,7 +917,8 @@ st.markdown("""
         color: #31263d;
         font-size: 0.86rem;
         font-weight: 800;
-        line-height: 1;
+        line-height: 1.15;
+        margin: 0.08rem auto 0 auto;
         text-align: center;
         width: 100%;
     }
@@ -941,8 +942,8 @@ st.markdown("""
         background: linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.08) 100%);
         border: 1px solid rgba(241, 225, 246, 0.42);
         border-radius: 8px;
-        padding: 0.38rem 0.42rem;
-        margin-bottom: 0.36rem;
+        padding: 0.9rem 1.05rem 1rem 1.05rem;
+        margin-bottom: 1.05rem;
         box-shadow: 0 6px 16px rgba(56, 40, 65, 0.11);
     }
 
@@ -1136,8 +1137,11 @@ st.markdown("""
         color: #fdf7ff;
         font-size: 0.78rem;
         font-weight: 700;
-        margin-top: 0.35rem;
-        padding: 0.35rem 0.48rem;
+        line-height: 1.25;
+        margin-top: 0.8rem;
+        margin-bottom: 0.45rem;
+        padding: 0.55rem 0.62rem 0.65rem 0.62rem;
+        overflow-wrap: anywhere;
     }
 
     .data-upload-session.pending {

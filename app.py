@@ -902,18 +902,25 @@ st.markdown("""
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 100%;
+        width: 100% !important;
         min-width: 0;
-        max-width: 100%;
-        height: 2.55rem;
+        max-width: 100% !important;
+        height: auto;
         min-height: 2.55rem;
-        background: linear-gradient(180deg, #eadcf0 0%, #dbc7e4 100%);
-        border: 1px solid #c9b1d5;
+        background: linear-gradient(180deg, #fff9ff 0%, #f2e8f6 100%) !important;
+        border: 1px solid #d6c4df !important;
         border-radius: 7px;
         color: #31263d !important;
         font-size: 0;
-        font-weight: 700;
-        padding: 0.18rem 0.7rem 0.22rem 0.7rem;
+        font-weight: 800;
+        padding: 0.55rem 0.7rem;
+        text-align: center;
+    }
+
+    [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button:hover {
+        background: linear-gradient(180deg, #ffffff 0%, #eadff0 100%) !important;
+        border-color: #ead8f0 !important;
+        color: #22192b !important;
     }
 
     [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button * {

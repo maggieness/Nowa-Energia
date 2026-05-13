@@ -272,47 +272,55 @@ def render_sidebar_navigation(current_page):
                 st.rerun()
 
 
-@st.dialog("Jak zacząć")
-def render_training_dialog():
+def render_training_panel():
     step = st.session_state.get("training_step", 0)
 
-    if step <= 0:
-        st.write("Czy chcesz przejść krótkie szkolenie, żeby umiejętnie używać aplikacji?")
-        st.write("Pomocnik poprowadzi Cię przez podstawowy scenariusz od wgrania danych do zatwierdzenia harmonogramu.")
-        action_cols = st.columns(2)
-        if action_cols[0].button("Rozpocznij szkolenie", use_container_width=True):
-            st.session_state["training_step"] = 1
-            st.rerun()
-        if action_cols[1].button("Nie teraz", use_container_width=True):
-            st.session_state["show_training_dialog"] = False
-            st.session_state["training_prompt_seen"] = True
-            st.rerun()
-        return
-
-    step_index = min(max(step, 1), len(TRAINING_STEPS)) - 1
-    training_step = TRAINING_STEPS[step_index]
-    st.markdown(f"**{training_step['title']}**")
-    st.write(training_step["body"])
-    st.caption(f"Krok {step_index + 1} z {len(TRAINING_STEPS)}")
-
-    nav_cols = st.columns(3)
-    if nav_cols[0].button("Wstecz", disabled=step_index == 0, use_container_width=True):
-        st.session_state["training_step"] = max(1, step - 1)
-        st.rerun()
-    if step_index < len(TRAINING_STEPS) - 1:
-        if nav_cols[1].button("Dalej", use_container_width=True):
-            st.session_state["training_step"] = step + 1
-            st.rerun()
-    else:
-        if nav_cols[1].button("Zakończ", use_container_width=True):
+    with st.container(key="training_helper_panel"):
+        title_cols = st.columns([5, 1])
+        title_cols[0].markdown("### Jak zacząć")
+        if title_cols[1].button("×", key="training_close_top", help="Zamknij pomocnika"):
             st.session_state["show_training_dialog"] = False
             st.session_state["training_prompt_seen"] = True
             st.session_state["training_step"] = 0
             st.rerun()
-    if nav_cols[2].button("Zamknij", use_container_width=True):
-        st.session_state["show_training_dialog"] = False
-        st.session_state["training_prompt_seen"] = True
-        st.rerun()
+
+        if step <= 0:
+            st.write("Czy chcesz przejść krótkie szkolenie, żeby umiejętnie używać aplikacji?")
+            st.write("Pomocnik poprowadzi Cię przez podstawowy scenariusz od wgrania danych do zatwierdzenia harmonogramu.")
+            action_cols = st.columns(2)
+            if action_cols[0].button("Rozpocznij szkolenie", key="training_start", use_container_width=True):
+                st.session_state["training_step"] = 1
+                st.rerun()
+            if action_cols[1].button("Nie teraz", key="training_not_now", use_container_width=True):
+                st.session_state["show_training_dialog"] = False
+                st.session_state["training_prompt_seen"] = True
+                st.rerun()
+            return
+
+        step_index = min(max(step, 1), len(TRAINING_STEPS)) - 1
+        training_step = TRAINING_STEPS[step_index]
+        st.markdown(f"**{training_step['title']}**")
+        st.write(training_step["body"])
+        st.caption(f"Krok {step_index + 1} z {len(TRAINING_STEPS)}")
+
+        nav_cols = st.columns(3)
+        if nav_cols[0].button("Wstecz", key="training_back", disabled=step_index == 0, use_container_width=True):
+            st.session_state["training_step"] = max(1, step - 1)
+            st.rerun()
+        if step_index < len(TRAINING_STEPS) - 1:
+            if nav_cols[1].button("Dalej", key="training_next", use_container_width=True):
+                st.session_state["training_step"] = step + 1
+                st.rerun()
+        else:
+            if nav_cols[1].button("Zakończ", key="training_finish", use_container_width=True):
+                st.session_state["show_training_dialog"] = False
+                st.session_state["training_prompt_seen"] = True
+                st.session_state["training_step"] = 0
+                st.rerun()
+        if nav_cols[2].button("Zamknij", key="training_close", use_container_width=True):
+            st.session_state["show_training_dialog"] = False
+            st.session_state["training_prompt_seen"] = True
+            st.rerun()
 
 
 def render_monthly_schedule_view(plan_df):
@@ -1545,6 +1553,49 @@ st.markdown("""
         color: #22192b !important;
     }
 
+    .st-key-training_helper_panel {
+        position: fixed;
+        top: 1rem;
+        right: 1.1rem;
+        z-index: 9999;
+        width: min(420px, calc(100vw - 2rem));
+        max-height: calc(100vh - 2rem);
+        overflow-y: auto;
+        background: #ffffff;
+        border: 1px solid var(--ne-border);
+        border-radius: 8px;
+        box-shadow: 0 18px 42px rgba(42, 34, 48, 0.22);
+        padding: 1rem 1rem 0.95rem 1rem;
+    }
+
+    .st-key-training_helper_panel h3 {
+        border: 0;
+        margin: 0 0 0.25rem 0;
+        padding: 0;
+    }
+
+    .st-key-training_helper_panel .stButton > button {
+        background: linear-gradient(180deg, #efe6f5 0%, #decce8 100%) !important;
+        border: 1px solid #c9b1d5 !important;
+        color: #31263d !important;
+        font-weight: 800;
+    }
+
+    .st-key-training_helper_panel .stButton > button *,
+    .st-key-training_helper_panel .stButton > button p,
+    .st-key-training_helper_panel .stButton > button span {
+        color: #31263d !important;
+        font-weight: 800 !important;
+    }
+
+    .st-key-training_helper_panel .st-key-training_close_top button {
+        min-width: 2rem;
+        width: 2rem;
+        min-height: 2rem;
+        padding: 0;
+        border-radius: 999px;
+    }
+
     .data-upload-card {
         background: transparent;
         border: 0;
@@ -1815,7 +1866,7 @@ if st.sidebar.button("Jak zacząć?", use_container_width=True):
     st.rerun()
 
 if st.session_state.get("show_training_dialog", False):
-    render_training_dialog()
+    render_training_panel()
 
 with st.sidebar.expander("Dane", expanded=True):
     stale_path = st.session_state["stale_path"]

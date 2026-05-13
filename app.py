@@ -87,6 +87,7 @@ def render_data_upload(file_key, label, target_filename, file_types, on_upload=N
     if file_key in ["planowanie", "hr"]:
         st.session_state["schedule_results"] = None
         st.session_state["approved"] = False
+        st.session_state["rdm_changes_pending_approval"] = False
         st.session_state["pending_nav_page"] = "Zarządzanie Harmonogramem"
 
     if on_upload is not None:
@@ -124,6 +125,7 @@ def run_current_planning():
             st.session_state["schedule_results"].get("plan", pd.DataFrame())
         )
         st.session_state["approved"] = False
+        st.session_state["rdm_changes_pending_approval"] = False
         st.success(f"Planowanie zakończone. Plik wyjściowy zapisano jako {output_path}")
     except Exception as exc:
         st.error(f"Błąd podczas planowania: {exc}")
@@ -390,6 +392,7 @@ def approve_current_schedule():
 
     st.session_state["schedule_results"] = results
     st.session_state["approved"] = True
+    st.session_state["rdm_changes_pending_approval"] = False
     save_current_results_to_excel()
 
 
@@ -461,10 +464,30 @@ def classify_rdm_report(uploaded_report):
     input_path = save_uploaded_file(uploaded_report, f"rdm_report_{uploaded_report.name}")
     output_path = os.path.join(os.getcwd(), "rdm_klasyfikacja_output.xlsx")
     classified = classify_file(input_path, output_path)
+    classified = sort_rdm_classification(classified)
     st.session_state["rdm_classification"] = classified
     st.session_state["rdm_classification_output_path"] = output_path
     st.session_state["rdm_import_summary"] = None
     return classified
+
+
+def sort_rdm_classification(classified_df):
+    if classified_df is None or classified_df.empty:
+        return classified_df
+
+    sorted_df = classified_df.copy()
+    for column in ["data_wymagana", "data_czas_kwalifikacji"]:
+        if column in sorted_df.columns:
+            sorted_df[column] = pd.to_datetime(sorted_df[column], errors="coerce")
+
+    sort_columns = [
+        column
+        for column in ["data_wymagana", "data_czas_kwalifikacji", "wynik_priorytet_operacyjny", "id_zgloszenia_rdm"]
+        if column in sorted_df.columns
+    ]
+    if sort_columns:
+        sorted_df = sorted_df.sort_values(sort_columns, kind="stable").reset_index(drop=True)
+    return sorted_df
 
 
 def should_show_rdm_ai_notice():
@@ -555,7 +578,13 @@ def build_plan_rows_from_rdm(classified_df):
             "zrodlo_zadania": "Rejestr awarii RDM",
         })
 
-    return pd.DataFrame(rows), rejected, decision
+    rows_df = pd.DataFrame(rows)
+    if not rows_df.empty:
+        rows_df["data_wymagana"] = pd.to_datetime(rows_df["data_wymagana"], errors="coerce")
+        rows_df["data"] = pd.to_datetime(rows_df["data"], errors="coerce")
+        sort_columns = [column for column in ["data_wymagana", "data", "priorytet", "id_zadania"] if column in rows_df.columns]
+        rows_df = rows_df.sort_values(sort_columns, kind="stable").reset_index(drop=True)
+    return rows_df, rejected, decision
 
 
 def import_rdm_classification_to_schedule():
@@ -564,7 +593,6 @@ def import_rdm_classification_to_schedule():
     if classified is None or classified.empty or results is None:
         return {"imported": 0, "skipped_duplicates": 0, "rejected": 0, "decision": 0}
 
-    was_approved = bool(st.session_state.get("approved", False))
     plan_df = ensure_execution_status(results.get("plan", pd.DataFrame()))
     new_rows, rejected, decision = build_plan_rows_from_rdm(classified)
     if new_rows.empty:
@@ -575,10 +603,12 @@ def import_rdm_classification_to_schedule():
     skipped_duplicates = len(build_plan_rows_from_rdm(classified)[0]) - len(new_rows)
 
     if not new_rows.empty:
-        if was_approved:
-            new_rows["status"] = "Zatwierdzony"
         results["plan"] = pd.concat([plan_df, new_rows], ignore_index=True)
         results["plan"] = ensure_execution_status(results["plan"])
+        if "data" in results["plan"].columns:
+            results["plan"]["data"] = pd.to_datetime(results["plan"]["data"], errors="coerce")
+            sort_columns = [column for column in ["data", "priorytet", "id_zadania"] if column in results["plan"].columns]
+            results["plan"] = results["plan"].sort_values(sort_columns, kind="stable").reset_index(drop=True)
         results["log"] = pd.concat([
             results.get("log", pd.DataFrame()),
             pd.DataFrame([{
@@ -590,7 +620,8 @@ def import_rdm_classification_to_schedule():
             }]),
         ], ignore_index=True)
         st.session_state["schedule_results"] = results
-        st.session_state["approved"] = was_approved and bool((results["plan"]["status"] == "Zatwierdzony").all())
+        st.session_state["approved"] = False
+        st.session_state["rdm_changes_pending_approval"] = True
         save_current_results_to_excel()
 
     summary = {
@@ -1431,6 +1462,8 @@ if "rdm_classification_output_path" not in st.session_state:
     st.session_state["rdm_classification_output_path"] = None
 if "rdm_import_summary" not in st.session_state:
     st.session_state["rdm_import_summary"] = None
+if "rdm_changes_pending_approval" not in st.session_state:
+    st.session_state["rdm_changes_pending_approval"] = False
 
 DATA_BASIC_PAGES = [
     "Dane wejściowe",
@@ -1631,11 +1664,18 @@ elif active_page == "Harmonogram":
         st.info("Najpierw uruchom planowanie.")
         render_run_planning_button("run_planning_from_empty_schedule")
     elif not st.session_state["approved"]:
-        st.warning("Brak harmonogramu do wyświetlenia.")
-        st.info(
-            "Zatwierdź wygenerowany harmonogram w zakładce „Zarządzanie harmonogramem”, "
-            "aby zobaczyć go tutaj."
-        )
+        if st.session_state.get("rdm_changes_pending_approval", False):
+            st.warning(
+                "Wgrano rejestr awarii RDM i dodano zmiany do harmonogramu. "
+                "Zanim harmonogram będzie ostateczny, kierownik wykonawstwa musi zweryfikować i zaakceptować te zmiany "
+                "w zakładce „Zarządzanie Harmonogramem”."
+            )
+        else:
+            st.warning("Brak harmonogramu do wyświetlenia.")
+            st.info(
+                "Zatwierdź wygenerowany harmonogram w zakładce „Zarządzanie harmonogramem”, "
+                "aby zobaczyć go tutaj."
+            )
         render_run_planning_button("run_planning_from_unapproved_schedule")
     else:
         st.session_state["schedule_results"]["plan"] = ensure_execution_status(st.session_state["schedule_results"]["plan"])
@@ -1713,6 +1753,11 @@ elif active_page == "Zarządzanie Harmonogramem":
                     "Klasyfikacje awarii dodawane z raportu RDM są rekomendacją AI. "
                     "Przed zaakceptowaniem ich w harmonogramie kierownik wykonawstwa musi zweryfikować poprawność klasyfikacji, "
                     "priorytetu, wymaganych kompetencji i terminu."
+                )
+            if st.session_state.get("rdm_changes_pending_approval", False):
+                st.warning(
+                    "Zaimportowano zmiany z rejestru awarii RDM. "
+                    "Zweryfikuj dodane awarie i zatwierdź harmonogram ponownie, zanim uznasz go za ostateczny."
                 )
             if st.session_state["approved"]:
                 st.success("Harmonogram jest zatwierdzony. Wybierz zakładkę Harmonogram w menu, aby zobaczyć finalny podgląd.")
@@ -1842,6 +1887,8 @@ elif active_page == "Rejestr Awarii":
 
                 result_columns = [
                     "id_zgloszenia_rdm",
+                    "data_wymagana",
+                    "data_czas_kwalifikacji",
                     "miasto",
                     "ulica",
                     "wynik_kod_typu_awarii",
@@ -1859,6 +1906,8 @@ elif active_page == "Rejestr Awarii":
                 st.dataframe(
                     classified[result_columns].rename(columns={
                         "id_zgloszenia_rdm": "ID RDM",
+                        "data_wymagana": "Data wymagana",
+                        "data_czas_kwalifikacji": "Data kwalifikacji",
                         "miasto": "Miasto",
                         "ulica": "Ulica",
                         "wynik_kod_typu_awarii": "Kod awarii",

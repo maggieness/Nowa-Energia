@@ -907,8 +907,8 @@ st.markdown("""
         max-width: 100% !important;
         height: auto;
         min-height: 2.55rem;
-        background: linear-gradient(180deg, #fff9ff 0%, #f2e8f6 100%) !important;
-        border: 1px solid #d6c4df !important;
+        background: linear-gradient(180deg, #eadcf0 0%, #dbc7e4 100%) !important;
+        border: 1px solid #c9b1d5 !important;
         border-radius: 7px;
         color: #31263d !important;
         font-size: 0;
@@ -918,8 +918,8 @@ st.markdown("""
     }
 
     [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button:hover {
-        background: linear-gradient(180deg, #ffffff 0%, #eadff0 100%) !important;
-        border-color: #ead8f0 !important;
+        background: linear-gradient(180deg, #eadcf0 0%, #dbc7e4 100%) !important;
+        border-color: #c9b1d5 !important;
         color: #22192b !important;
     }
 
@@ -988,8 +988,8 @@ st.markdown("""
     }
 
     [data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] .stButton > button {
-        background: linear-gradient(180deg, #fff9ff 0%, #f2e8f6 100%) !important;
-        border: 1px solid #d6c4df !important;
+        background: linear-gradient(180deg, #eadcf0 0%, #dbc7e4 100%) !important;
+        border: 1px solid #c9b1d5 !important;
         color: #31263d !important;
         font-size: 0.86rem;
         font-weight: 800;
@@ -998,9 +998,24 @@ st.markdown("""
         text-align: center;
     }
 
+    [data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] .stButton > button *,
+    [data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] .stButton > button p,
+    [data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] .stButton > button span {
+        color: #31263d !important;
+        font-size: 0.86rem !important;
+        font-weight: 800 !important;
+        line-height: 1.15 !important;
+    }
+
     [data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] .stButton > button:hover {
-        background: linear-gradient(180deg, #ffffff 0%, #eadff0 100%) !important;
-        border-color: #ead8f0 !important;
+        background: linear-gradient(180deg, #eadcf0 0%, #dbc7e4 100%) !important;
+        border-color: #c9b1d5 !important;
+        color: #22192b !important;
+    }
+
+    [data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] .stButton > button:hover *,
+    [data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] .stButton > button:hover p,
+    [data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] .stButton > button:hover span {
         color: #22192b !important;
     }
 

@@ -898,10 +898,15 @@ st.markdown("""
         background: linear-gradient(180deg, #fff9ff 0%, #f2e8f6 100%);
         border: 1px solid #d6c4df;
         border-radius: 7px;
-        color: #31263d !important;
+        color: transparent !important;
         font-size: 0;
         font-weight: 700;
         padding: 0;
+    }
+
+    [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button * {
+        color: transparent !important;
+        font-size: 0 !important;
     }
 
     [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button::after {

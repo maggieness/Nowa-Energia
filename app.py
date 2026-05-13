@@ -52,14 +52,6 @@ TRAINING_STEPS = [
             "Dopiero zatwierdzony harmonogram pojawi się jako finalny podgląd w zakładce Harmonogram."
         ),
     },
-    {
-        "title": "Czy można zrobić to z czatem LLM?",
-        "body": (
-            "Tak. Ten pomocnik jest prostym scenariuszem szkoleniowym w aplikacji. "
-            "Możemy później rozbudować go o interaktywny czat LLM, który odpowiada na pytania użytkownika, "
-            "rozpoznaje aktualny etap pracy i podpowiada kolejne działania."
-        ),
-    },
 ]
 
 
@@ -357,11 +349,14 @@ def render_monthly_schedule_view(plan_df):
             godziny=("zaplanowane_godziny", "sum"),
             brygady=("brygada", lambda values: ", ".join(sorted({str(value) for value in values.dropna()}))),
         )
-        .reindex(all_days, fill_value=0)
+        .reindex(all_days)
         .reset_index()
         .rename(columns={"index": "Data"})
     )
     daily["Data"] = pd.to_datetime(daily["Data"])
+    daily["zadania"] = pd.to_numeric(daily["zadania"], errors="coerce").fillna(0)
+    daily["godziny"] = pd.to_numeric(daily["godziny"], errors="coerce").fillna(0)
+    daily["brygady"] = daily["brygady"].fillna("").astype(str)
 
     emergency_daily = (
         month_df[emergency_mask]
@@ -384,7 +379,7 @@ def render_monthly_schedule_view(plan_df):
     daily["Data"] = daily["Data"].dt.strftime("%Y-%m-%d")
     daily["Godziny"] = pd.to_numeric(daily["godziny"], errors="coerce").fillna(0).round(1)
     daily["Zadania"] = pd.to_numeric(daily["zadania"], errors="coerce").fillna(0).astype(int)
-    daily["Brygady"] = daily["brygady"].replace(0, "")
+    daily["Brygady"] = daily["brygady"].replace("0", "")
     daily["Godziny awarii"] = pd.to_numeric(daily["Godziny awarii"], errors="coerce").fillna(0).round(1)
 
     total_hours = month_df["zaplanowane_godziny"].sum()

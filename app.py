@@ -1618,7 +1618,10 @@ elif active_page == "Zarządzanie Harmonogramem":
 
             st.info(
                 "Harmonogram został wygenerowany przez AI i wymaga ręcznej weryfikacji. "
-                "Po sprawdzeniu danych zatwierdź harmonogram, aby udostępnić jego finalny podgląd w zakładce Harmonogram."
+                "Klasyfikacje awarii dodawane z raportu RDM również są rekomendacją AI. "
+                "Przed zaakceptowaniem ich w harmonogramie kierownik wykonawstwa musi zweryfikować poprawność klasyfikacji, "
+                "priorytetu, wymaganych kompetencji i terminu. Po sprawdzeniu danych zatwierdź harmonogram, "
+                "aby udostępnić jego finalny podgląd w zakładce Harmonogram."
             )
             if st.session_state["approved"]:
                 st.success("Harmonogram jest zatwierdzony. Wybierz zakładkę Harmonogram w menu, aby zobaczyć finalny podgląd.")
@@ -1720,11 +1723,20 @@ elif active_page == "Rejestr Awarii":
                         st.session_state["uploaded_emergency_report_meta"] = report_meta
                         classify_rdm_report(uploaded_emergency_report)
                         st.success(f"Raport awarii sklasyfikowany: {uploaded_emergency_report.name}")
+                        st.warning(
+                            "Klasyfikacja awarii została wykonana przez AI. "
+                            "Zanim zostanie zaakceptowana w harmonogramie, musi zostać zweryfikowana przez kierownika wykonawstwa."
+                        )
                     except Exception as exc:
                         st.error(f"Nie udało się sklasyfikować raportu RDM: {exc}")
 
             classified = st.session_state.get("rdm_classification")
             if classified is not None and not classified.empty:
+                st.warning(
+                    "Klasyfikacja awarii została wykonana przez AI. "
+                    "Przed importem do harmonogramu kierownik wykonawstwa powinien zweryfikować wynik klasyfikacji, "
+                    "priorytet, wymagane kompetencje oraz decyzję, czy awaria ma zostać dodana do planu."
+                )
                 summary_cols = st.columns(4)
                 summary_cols[0].metric("RDM rekordy", len(classified))
                 summary_cols[1].metric(

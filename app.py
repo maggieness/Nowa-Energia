@@ -29,7 +29,7 @@ TRAINING_STEPS = [
     {
         "title": "2. Uruchom planowanie",
         "body": (
-            "Przejdź do zakładki Zarządzanie Harmonogramem i kliknij przycisk Uruchom planowanie. "
+            "Przejdź do zakładki **Zarządzanie Harmonogramem** i kliknij przycisk Uruchom planowanie. "
             "Aplikacja przygotuje propozycję harmonogramu."
         ),
     },
@@ -44,13 +44,13 @@ TRAINING_STEPS = [
         "title": "4. Zatwierdź harmonogram",
         "body": (
             "Po sprawdzeniu harmonogramu kliknij Zatwierdź harmonogram. "
-            "Dopiero zatwierdzony harmonogram pojawi się jako finalny podgląd w zakładce Harmonogram."
+            "Następnie przejdź do zakładki **Harmonogram**, żeby zobaczyć finalny, zatwierdzony podgląd."
         ),
     },
     {
         "title": "5. Wgraj rejestr awarii",
         "body": (
-            "Przejdź do zakładki Rejestr Awarii i wgraj przykładowy plik "
+            "Przejdź do zakładki **Rejestr Awarii** i wgraj przykładowy plik "
             "`rdm_awarie_do_klasyfikacji_harmonogramu.xlsx`. "
             "Aplikacja sklasyfikuje awarie i pokaże wynik do weryfikacji."
         ),
@@ -59,14 +59,14 @@ TRAINING_STEPS = [
         "title": "6. Dodaj i zaakceptuj awarie",
         "body": (
             "Po sprawdzeniu klasyfikacji kliknij Importuj zakwalifikowane awarie do harmonogramu. "
-            "Następnie wróć do Zarządzanie Harmonogramem, zaakceptuj awarie RDM pojedynczo lub wszystkie naraz, "
+            "Następnie wróć do **Zarządzanie Harmonogramem**, zaakceptuj awarie RDM pojedynczo lub wszystkie naraz, "
             "a potem zatwierdź harmonogram ponownie."
         ),
     },
     {
         "title": "7. Przejdź do Dashboardu",
         "body": (
-            "Na końcu otwórz zakładkę Dashboard. Zobaczysz tam podsumowanie statusów prac, obciążenie brygad, "
+            "Na końcu otwórz zakładkę **Dashboard**. Zobaczysz tam podsumowanie statusów prac, obciążenie brygad, "
             "miesięczny widok harmonogramu, czas pracy w wybranym miesiącu, godziny awarii oraz zadania niezaplanowane."
         ),
     },
@@ -300,7 +300,7 @@ def render_training_panel():
         step_index = min(max(step, 1), len(TRAINING_STEPS)) - 1
         training_step = TRAINING_STEPS[step_index]
         st.markdown(f"**{training_step['title']}**")
-        st.write(training_step["body"])
+        st.markdown(training_step["body"])
         st.caption(f"Krok {step_index + 1} z {len(TRAINING_STEPS)}")
 
         nav_cols = st.columns(3)

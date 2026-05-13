@@ -1,5 +1,6 @@
 import os
 import tempfile
+import calendar
 import streamlit as st
 import pandas as pd
 from html import escape
@@ -215,6 +216,128 @@ def render_sidebar_navigation(current_page):
                 st.rerun()
 
 
+def render_monthly_schedule_view(plan_df):
+    if plan_df is None or plan_df.empty or "data" not in plan_df.columns:
+        st.subheader("Miesięczny widok harmonogramu")
+        st.write("Brak dat w harmonogramie.")
+        return
+
+    monthly_df = plan_df.copy()
+    monthly_df["data"] = pd.to_datetime(monthly_df["data"], errors="coerce")
+    monthly_df = monthly_df.dropna(subset=["data"])
+    if monthly_df.empty:
+        st.subheader("Miesięczny widok harmonogramu")
+        st.write("Brak poprawnych dat w harmonogramie.")
+        return
+
+    monthly_df["zaplanowane_godziny"] = pd.to_numeric(
+        monthly_df.get("zaplanowane_godziny", pd.Series(dtype=float)),
+        errors="coerce",
+    ).fillna(0)
+    monthly_df["miesiac"] = monthly_df["data"].dt.to_period("M").astype(str)
+
+    months = sorted(monthly_df["miesiac"].dropna().unique())
+    current_month = pd.Timestamp.today().strftime("%Y-%m")
+    default_index = months.index(current_month) if current_month in months else len(months) - 1
+
+    header_cols = st.columns([3, 1])
+    with header_cols[0]:
+        st.subheader("Miesięczny widok harmonogramu")
+    with header_cols[1]:
+        selected_month = st.selectbox("Miesiąc", months, index=default_index, key="dashboard_month")
+
+    month_df = monthly_df[monthly_df["miesiac"] == selected_month].copy()
+    if month_df.empty:
+        st.write("Brak zadań w wybranym miesiącu.")
+        return
+    if "id_zadania" not in month_df.columns:
+        month_df["id_zadania"] = month_df.index.astype(str)
+    if "brygada" not in month_df.columns:
+        month_df["brygada"] = ""
+
+    emergency_mask = get_emergency_mask(month_df)
+    first_day = pd.Period(selected_month, freq="M").to_timestamp()
+    days_in_month = calendar.monthrange(first_day.year, first_day.month)[1]
+    all_days = pd.date_range(first_day, periods=days_in_month, freq="D")
+
+    daily = (
+        month_df.assign(dzien=month_df["data"].dt.normalize())
+        .groupby("dzien", dropna=False)
+        .agg(
+            zadania=("id_zadania", "count"),
+            godziny=("zaplanowane_godziny", "sum"),
+            brygady=("brygada", lambda values: ", ".join(sorted({str(value) for value in values.dropna()}))),
+        )
+        .reindex(all_days, fill_value=0)
+        .reset_index()
+        .rename(columns={"index": "Data"})
+    )
+    daily["Data"] = pd.to_datetime(daily["Data"])
+
+    emergency_daily = (
+        month_df[emergency_mask]
+        .assign(dzien=month_df.loc[emergency_mask, "data"].dt.normalize())
+        .groupby("dzien")["zaplanowane_godziny"]
+        .sum()
+        .reindex(all_days, fill_value=0)
+        .reset_index(drop=True)
+    )
+    daily["Godziny awarii"] = emergency_daily
+    daily["Dzień tygodnia"] = daily["Data"].dt.day_name().map({
+        "Monday": "pon.",
+        "Tuesday": "wt.",
+        "Wednesday": "śr.",
+        "Thursday": "czw.",
+        "Friday": "pt.",
+        "Saturday": "sob.",
+        "Sunday": "ndz.",
+    })
+    daily["Data"] = daily["Data"].dt.strftime("%Y-%m-%d")
+    daily["Godziny"] = pd.to_numeric(daily["godziny"], errors="coerce").fillna(0).round(1)
+    daily["Zadania"] = pd.to_numeric(daily["zadania"], errors="coerce").fillna(0).astype(int)
+    daily["Brygady"] = daily["brygady"].replace(0, "")
+    daily["Godziny awarii"] = pd.to_numeric(daily["Godziny awarii"], errors="coerce").fillna(0).round(1)
+
+    total_hours = month_df["zaplanowane_godziny"].sum()
+    work_days = int((daily["Godziny"] > 0).sum())
+    emergency_hours = float(daily["Godziny awarii"].sum())
+    avg_day_hours = total_hours / work_days if work_days else 0
+
+    month_metrics = st.columns(4)
+    month_metrics[0].metric("Czas pracy w miesiącu", f"{total_hours:.1f} h")
+    month_metrics[1].metric("Dni z pracą", work_days)
+    month_metrics[2].metric("Średnio na dzień pracy", f"{avg_day_hours:.1f} h")
+    month_metrics[3].metric("Godziny awarii", f"{emergency_hours:.1f} h")
+
+    try:
+        import plotly.express as px
+
+        chart_df = daily.copy()
+        fig = px.bar(
+            chart_df,
+            x="Data",
+            y="Godziny",
+            color="Godziny awarii",
+            color_continuous_scale=["#8d6aa5", "#be123c"],
+            hover_data=["Zadania", "Godziny awarii", "Brygady"],
+        )
+        fig.update_layout(
+            margin=dict(l=0, r=0, t=12, b=0),
+            height=320,
+            coloraxis_colorbar=dict(title="Awaria h"),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    except Exception:
+        pass
+
+    st.dataframe(
+        daily[["Data", "Dzień tygodnia", "Zadania", "Godziny", "Godziny awarii", "Brygady"]],
+        hide_index=True,
+        use_container_width=True,
+        height=min(520, max(220, 34 * (len(daily) + 1))),
+    )
+
+
 def render_operations_dashboard(results):
     if results is None:
         st.info("Najpierw uruchom planowanie.")
@@ -278,6 +401,8 @@ def render_operations_dashboard(results):
 
     if attention_items:
         st.info(" ".join(attention_items))
+
+    render_monthly_schedule_view(plan_df)
 
     status_summary = (
         plan_df.get("status_wykonania", pd.Series(dtype=str))

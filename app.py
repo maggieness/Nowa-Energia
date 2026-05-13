@@ -975,16 +975,6 @@ def get_emergency_mask(plan_df):
     return marked_df["Źródło"].astype(str).str.lower() == "awaria"
 
 
-def format_emergency_option(row):
-    date_value = pd.to_datetime(row.get("data"), errors="coerce")
-    date_label = date_value.strftime("%Y-%m-%d") if not pd.isna(date_value) else "bez daty"
-    task_id = row.get("id_zadania", "brak ID")
-    task_name = str(row.get("nazwa_zadania", "Awaria")).strip()
-    if len(task_name) > 80:
-        task_name = f"{task_name[:77]}..."
-    return f"{date_label} | {task_id} | {task_name}"
-
-
 def approve_emergency_rows(row_indices):
     results = st.session_state.get("schedule_results")
     if results is None:
@@ -1017,6 +1007,20 @@ def approve_emergency_rows(row_indices):
     st.session_state["schedule_results"] = results
     save_current_results_to_excel()
     return len(valid_indices)
+
+
+def approve_emergency_task_ids(task_ids):
+    results = st.session_state.get("schedule_results")
+    if results is None or not task_ids:
+        return 0
+
+    plan_df = ensure_execution_status(results.get("plan", pd.DataFrame()))
+    if plan_df.empty or "id_zadania" not in plan_df.columns:
+        return 0
+
+    task_id_set = {str(task_id) for task_id in task_ids}
+    matching_indices = plan_df.index[plan_df["id_zadania"].astype(str).isin(task_id_set)].tolist()
+    return approve_emergency_rows(matching_indices)
 
 
 def get_emergency_tasks(plan_df):
@@ -2145,50 +2149,70 @@ elif active_page == "Zarządzanie Harmonogramem":
                     st.success("Zatwierdzenie oznacza decyzję kierownika wykonawstwa. System nie podejmuje decyzji operacyjnej samodzielnie.")
                     st.rerun()
 
-            emergency_mask = get_emergency_mask(plan_df)
-            emergency_rows = plan_df[emergency_mask].copy()
-            if not emergency_rows.empty:
-                if "data" in emergency_rows.columns:
-                    emergency_rows["data"] = pd.to_datetime(emergency_rows["data"], errors="coerce")
-                    emergency_rows = emergency_rows.sort_values(
-                        [column for column in ["data", "priorytet", "id_zadania"] if column in emergency_rows.columns],
-                        kind="stable",
-                    )
+            with st.expander("Edytuj harmonogram", expanded=True):
+                st.write("Zmień wartości w tabeli i kliknij Zapisz zmiany w harmonogramie.")
+                emergency_mask = get_emergency_mask(plan_df)
+                emergency_rows = plan_df[emergency_mask].copy()
+                if not emergency_rows.empty:
+                    if "data" in emergency_rows.columns:
+                        emergency_rows["data"] = pd.to_datetime(emergency_rows["data"], errors="coerce")
+                        emergency_rows = emergency_rows.sort_values(
+                            [column for column in ["data", "priorytet", "id_zadania"] if column in emergency_rows.columns],
+                            kind="stable",
+                        )
 
-                with st.expander("Awarie RDM do akceptacji", expanded=st.session_state.get("rdm_changes_pending_approval", False)):
-                    st.write("Awarie dodane z rejestru RDM są oznaczone na czerwono. Możesz zaakceptować wszystkie naraz albo wybrane pozycje.")
+                    st.markdown("**Awarie RDM do dodania do harmonogramu**")
+                    st.write("Awarie dodane z rejestru RDM są oznaczone na czerwono. Możesz zaznaczyć wszystkie naraz albo wybrane pozycje.")
                     show_plan_grid(emergency_rows)
 
                     pending_emergency_rows = emergency_rows[emergency_rows["status"].astype(str) != "Zatwierdzony"] if "status" in emergency_rows.columns else emergency_rows
                     if pending_emergency_rows.empty:
-                        st.success("Wszystkie awarie RDM w harmonogramie są zatwierdzone.")
+                        st.success("Wszystkie awarie RDM w harmonogramie są już dodane i zatwierdzone.")
                     else:
-                        option_pairs = [
-                            (f"{format_emergency_option(row)} [{idx}]", idx)
-                            for idx, row in pending_emergency_rows.iterrows()
-                        ]
-                        option_labels = [label for label, _ in option_pairs]
-                        option_to_index = dict(option_pairs)
-
-                        bulk_cols = st.columns([2, 2, 3])
-                        if bulk_cols[0].button("Zatwierdź wszystkie awarie RDM", use_container_width=True):
-                            approved_count = approve_emergency_rows(list(pending_emergency_rows.index))
-                            st.success(f"Zatwierdzono awarie RDM: {approved_count}.")
-                            st.rerun()
-
-                        selected_labels = st.multiselect(
-                            "Wybierz jedną lub wiele awarii do zatwierdzenia",
-                            option_labels,
-                            key="selected_rdm_emergencies_to_approve",
+                        select_all_emergencies = st.checkbox(
+                            "Zaznacz wszystko",
+                            key=f"select_all_rdm_emergencies_{st.session_state['schedule_editor_version']}",
                         )
-                        selected_indices = [option_to_index[label] for label in selected_labels]
-                        if st.button("Zatwierdź wybrane awarie RDM", disabled=not selected_indices, use_container_width=True):
-                            approved_count = approve_emergency_rows(selected_indices)
-                            st.success(f"Zatwierdzono wybrane awarie RDM: {approved_count}.")
+                        approval_table = pending_emergency_rows.copy()
+                        approval_table.insert(0, "Dodaj", bool(select_all_emergencies))
+
+                        approval_columns = [
+                            "Dodaj",
+                            "data",
+                            "id_zadania",
+                            "nazwa_zadania",
+                            "brygada",
+                            "zaplanowane_godziny",
+                            "priorytet",
+                            "status",
+                        ]
+                        approval_columns = [column for column in approval_columns if column in approval_table.columns]
+                        edited_approval_table = st.data_editor(
+                            approval_table[approval_columns],
+                            hide_index=True,
+                            use_container_width=True,
+                            key=f"rdm_approval_editor_{st.session_state['schedule_editor_version']}_{bool(select_all_emergencies)}",
+                            disabled=[column for column in approval_columns if column != "Dodaj"],
+                            column_config={
+                                "Dodaj": st.column_config.CheckboxColumn("Dodaj", help="Zaznacz awarię do dodania do harmonogramu"),
+                                "data": st.column_config.DateColumn("Data"),
+                                "id_zadania": st.column_config.TextColumn("ID"),
+                                "nazwa_zadania": st.column_config.TextColumn("Awaria", width="large"),
+                                "brygada": st.column_config.TextColumn("Brygada"),
+                                "zaplanowane_godziny": st.column_config.NumberColumn("Godziny", format="%.1f"),
+                                "priorytet": st.column_config.NumberColumn("Priorytet"),
+                                "status": st.column_config.TextColumn("Status"),
+                            },
+                        )
+                        selected_indices = edited_approval_table.loc[
+                            edited_approval_table["Dodaj"].fillna(False),
+                            "id_zadania",
+                        ].tolist()
+                        if st.button("Dodaj do harmonogramu", disabled=not selected_indices, use_container_width=True):
+                            approved_count = approve_emergency_task_ids(selected_indices)
+                            st.success(f"Dodano do harmonogramu awarie RDM: {approved_count}.")
                             st.rerun()
 
-            with st.expander("Edytuj harmonogram", expanded=True):
-                st.write("Zmień wartości w tabeli i kliknij Zapisz zmiany w harmonogramie.")
                 editable_plan = filter_plan_table(plan_df, "schedule_edit")
                 if "data" in editable_plan.columns:
                     editable_plan["data"] = pd.to_datetime(editable_plan["data"], errors="coerce")

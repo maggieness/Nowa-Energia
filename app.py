@@ -58,7 +58,7 @@ TRAINING_STEPS = [
     {
         "title": "6. Dodaj i zaakceptuj awarie",
         "body": (
-            "Po sprawdzeniu klasyfikacji kliknij Importuj zakwalifikowane awarie do harmonogramu. "
+            "Po dodaniu i sprawdzeniu klasyfikacji koniecznie kliknij Importuj zakwalifikowane awarie do harmonogramu. "
             "Następnie wróć do **Zarządzanie Harmonogramem**, zaakceptuj awarie RDM pojedynczo lub wszystkie naraz, "
             "a potem zatwierdź harmonogram ponownie."
         ),
@@ -145,6 +145,7 @@ def render_data_upload(file_key, label, target_filename, file_types, on_upload=N
         st.session_state["schedule_results"] = None
         st.session_state["approved"] = False
         st.session_state["rdm_changes_pending_approval"] = False
+        st.session_state["schedule_editor_version"] = st.session_state.get("schedule_editor_version", 0) + 1
         st.session_state["pending_nav_page"] = "Zarządzanie Harmonogramem"
 
     if on_upload is not None:
@@ -183,6 +184,7 @@ def run_current_planning():
         )
         st.session_state["approved"] = False
         st.session_state["rdm_changes_pending_approval"] = False
+        st.session_state["schedule_editor_version"] = st.session_state.get("schedule_editor_version", 0) + 1
         st.success(f"Planowanie zakończone. Plik wyjściowy zapisano jako {output_path}")
     except Exception as exc:
         st.error(f"Błąd podczas planowania: {exc}")
@@ -857,6 +859,7 @@ def import_rdm_classification_to_schedule():
         st.session_state["schedule_results"] = results
         st.session_state["approved"] = False
         st.session_state["rdm_changes_pending_approval"] = True
+        st.session_state["schedule_editor_version"] = st.session_state.get("schedule_editor_version", 0) + 1
         save_current_results_to_excel()
 
     summary = {
@@ -1809,6 +1812,8 @@ if "stale_tables" not in st.session_state:
     st.session_state["stale_tables"] = None
 if "stale_editor_version" not in st.session_state:
     st.session_state["stale_editor_version"] = 0
+if "schedule_editor_version" not in st.session_state:
+    st.session_state["schedule_editor_version"] = 0
 if "uploaded_emergency_report_meta" not in st.session_state:
     st.session_state["uploaded_emergency_report_meta"] = None
 if "rdm_classification" not in st.session_state:
@@ -2197,7 +2202,7 @@ elif active_page == "Zarządzanie Harmonogramem":
                         hide_index=True,
                         use_container_width=True,
                         num_rows="dynamic",
-                        key="schedule_editor",
+                        key=f"schedule_editor_{st.session_state['schedule_editor_version']}",
                         disabled=["Źródło"],
                         column_config={
                             "Źródło": st.column_config.TextColumn("Źródło"),

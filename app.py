@@ -18,38 +18,56 @@ EXECUTION_STATUS_OPTIONS = ["Do wykonania", "W trakcie", "Wykonane", "Nie wykona
 
 TRAINING_STEPS = [
     {
-        "title": "1. Dodaj plik Dział planowania",
+        "title": "1. Wgraj dane wejściowe",
         "body": (
-            "W panelu bocznym, w sekcji Dane, kliknij Wgraj przy pozycji Dział planowania. "
-            "Użyj przykładowego pliku `planowanie_brygad_Dzial_planowania.xlsx`."
-        ),
-    },
-    {
-        "title": "2. Dodaj plik Brygady",
-        "body": (
-            "Następnie wgraj plik `planowanie_brygad_HR.xlsx` przy pozycji Brygady. "
+            "W panelu bocznym, w sekcji Dane, wgraj dwa przykładowe pliki: "
+            "`planowanie_brygad_Dzial_planowania.xlsx` przy pozycji Dział planowania oraz "
+            "`planowanie_brygad_HR.xlsx` przy pozycji Brygady. "
             "Po wgraniu obu plików aplikacja pokaże, że dane są gotowe do planowania."
         ),
     },
     {
-        "title": "3. Uruchom planowanie",
+        "title": "2. Uruchom planowanie",
         "body": (
             "Przejdź do zakładki Zarządzanie Harmonogramem i kliknij przycisk Uruchom planowanie. "
             "Aplikacja przygotuje propozycję harmonogramu."
         ),
     },
     {
-        "title": "4. Sprawdź propozycję AI",
+        "title": "3. Sprawdź propozycję AI",
         "body": (
             "Otrzymasz propozycję AI. W tym miejscu możesz ją zweryfikować, zmodyfikować w tabeli, "
             "a następnie kliknąć Zapisz zmiany w harmonogramie."
         ),
     },
     {
-        "title": "5. Zatwierdź harmonogram",
+        "title": "4. Zatwierdź harmonogram",
         "body": (
             "Po sprawdzeniu harmonogramu kliknij Zatwierdź harmonogram. "
             "Dopiero zatwierdzony harmonogram pojawi się jako finalny podgląd w zakładce Harmonogram."
+        ),
+    },
+    {
+        "title": "5. Wgraj rejestr awarii",
+        "body": (
+            "Przejdź do zakładki Rejestr Awarii i wgraj przykładowy plik "
+            "`rdm_awarie_do_klasyfikacji_harmonogramu.xlsx`. "
+            "Aplikacja sklasyfikuje awarie i pokaże wynik do weryfikacji."
+        ),
+    },
+    {
+        "title": "6. Dodaj i zaakceptuj awarie",
+        "body": (
+            "Po sprawdzeniu klasyfikacji kliknij Importuj zakwalifikowane awarie do harmonogramu. "
+            "Następnie wróć do Zarządzanie Harmonogramem, zaakceptuj awarie RDM pojedynczo lub wszystkie naraz, "
+            "a potem zatwierdź harmonogram ponownie."
+        ),
+    },
+    {
+        "title": "7. Przejdź do Dashboardu",
+        "body": (
+            "Na końcu otwórz zakładkę Dashboard. Zobaczysz tam podsumowanie statusów prac, obciążenie brygad, "
+            "miesięczny widok harmonogramu, czas pracy w wybranym miesiącu, godziny awarii oraz zadania niezaplanowane."
         ),
     },
 ]

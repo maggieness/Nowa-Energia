@@ -912,6 +912,11 @@ st.markdown("""
         font-size: 0 !important;
     }
 
+    [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button > div,
+    [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button > span {
+        display: none !important;
+    }
+
     [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button svg,
     [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button [class*="icon"],
     [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button [data-testid*="icon"] {

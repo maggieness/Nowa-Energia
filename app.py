@@ -16,6 +16,52 @@ DEFAULT_STALE_PATH = os.path.join(DATA_DIR, "planowanie_brygad_Stale.xlsx")
 PLAN_STATUS_OPTIONS = ["Rekomendowany", "Wymaga decyzji", "Zatwierdzony", "Odrzucony"]
 EXECUTION_STATUS_OPTIONS = ["Do wykonania", "W trakcie", "Wykonane", "Nie wykonane", "Przeniesione"]
 
+TRAINING_STEPS = [
+    {
+        "title": "1. Dodaj plik Dział planowania",
+        "body": (
+            "W panelu bocznym, w sekcji Dane, kliknij Wgraj przy pozycji Dział planowania. "
+            "Użyj przykładowego pliku `planowanie_brygad_Dzial_planowania.xlsx`."
+        ),
+    },
+    {
+        "title": "2. Dodaj plik Brygady",
+        "body": (
+            "Następnie wgraj plik `planowanie_brygad_HR.xlsx` przy pozycji Brygady. "
+            "Po wgraniu obu plików aplikacja pokaże, że dane są gotowe do planowania."
+        ),
+    },
+    {
+        "title": "3. Uruchom planowanie",
+        "body": (
+            "Przejdź do zakładki Zarządzanie Harmonogramem i kliknij przycisk Uruchom planowanie. "
+            "Aplikacja przygotuje propozycję harmonogramu."
+        ),
+    },
+    {
+        "title": "4. Sprawdź propozycję AI",
+        "body": (
+            "Otrzymasz propozycję AI. W tym miejscu możesz ją zweryfikować, zmodyfikować w tabeli, "
+            "a następnie kliknąć Zapisz zmiany w harmonogramie."
+        ),
+    },
+    {
+        "title": "5. Zatwierdź harmonogram",
+        "body": (
+            "Po sprawdzeniu harmonogramu kliknij Zatwierdź harmonogram. "
+            "Dopiero zatwierdzony harmonogram pojawi się jako finalny podgląd w zakładce Harmonogram."
+        ),
+    },
+    {
+        "title": "Czy można zrobić to z czatem LLM?",
+        "body": (
+            "Tak. Ten pomocnik jest prostym scenariuszem szkoleniowym w aplikacji. "
+            "Możemy później rozbudować go o interaktywny czat LLM, który odpowiada na pytania użytkownika, "
+            "rozpoznaje aktualny etap pracy i podpowiada kolejne działania."
+        ),
+    },
+]
+
 
 def load_workbook_tables(path):
     xls = pd.ExcelFile(path, engine="openpyxl")
@@ -214,6 +260,49 @@ def render_sidebar_navigation(current_page):
                 st.session_state["nav_page"] = page_name
                 st.query_params["nav"] = page_name
                 st.rerun()
+
+
+@st.dialog("Jak zacząć")
+def render_training_dialog():
+    step = st.session_state.get("training_step", 0)
+
+    if step <= 0:
+        st.write("Czy chcesz przejść krótkie szkolenie, żeby umiejętnie używać aplikacji?")
+        st.write("Pomocnik poprowadzi Cię przez podstawowy scenariusz od wgrania danych do zatwierdzenia harmonogramu.")
+        action_cols = st.columns(2)
+        if action_cols[0].button("Rozpocznij szkolenie", use_container_width=True):
+            st.session_state["training_step"] = 1
+            st.rerun()
+        if action_cols[1].button("Nie teraz", use_container_width=True):
+            st.session_state["show_training_dialog"] = False
+            st.session_state["training_prompt_seen"] = True
+            st.rerun()
+        return
+
+    step_index = min(max(step, 1), len(TRAINING_STEPS)) - 1
+    training_step = TRAINING_STEPS[step_index]
+    st.markdown(f"**{training_step['title']}**")
+    st.write(training_step["body"])
+    st.caption(f"Krok {step_index + 1} z {len(TRAINING_STEPS)}")
+
+    nav_cols = st.columns(3)
+    if nav_cols[0].button("Wstecz", disabled=step_index == 0, use_container_width=True):
+        st.session_state["training_step"] = max(1, step - 1)
+        st.rerun()
+    if step_index < len(TRAINING_STEPS) - 1:
+        if nav_cols[1].button("Dalej", use_container_width=True):
+            st.session_state["training_step"] = step + 1
+            st.rerun()
+    else:
+        if nav_cols[1].button("Zakończ", use_container_width=True):
+            st.session_state["show_training_dialog"] = False
+            st.session_state["training_prompt_seen"] = True
+            st.session_state["training_step"] = 0
+            st.rerun()
+    if nav_cols[2].button("Zamknij", use_container_width=True):
+        st.session_state["show_training_dialog"] = False
+        st.session_state["training_prompt_seen"] = True
+        st.rerun()
 
 
 def render_monthly_schedule_view(plan_df):
@@ -1640,6 +1729,12 @@ if "rdm_import_summary" not in st.session_state:
     st.session_state["rdm_import_summary"] = None
 if "rdm_changes_pending_approval" not in st.session_state:
     st.session_state["rdm_changes_pending_approval"] = False
+if "training_prompt_seen" not in st.session_state:
+    st.session_state["training_prompt_seen"] = False
+if "show_training_dialog" not in st.session_state:
+    st.session_state["show_training_dialog"] = not st.session_state["training_prompt_seen"]
+if "training_step" not in st.session_state:
+    st.session_state["training_step"] = 0
 
 DATA_BASIC_PAGES = [
     "Dane wejściowe",
@@ -1674,6 +1769,14 @@ elif "nav_page" not in st.session_state or st.session_state["nav_page"] not in P
 page = st.session_state["nav_page"]
 render_sidebar_navigation(page)
 PLAN_BUTTON_HELP = "Aplikacja generuje rekomendację. Decyzję podejmuje kierownik wykonawstwa."
+
+if st.sidebar.button("Jak zacząć?", use_container_width=True):
+    st.session_state["show_training_dialog"] = True
+    st.session_state["training_step"] = 0
+    st.rerun()
+
+if st.session_state.get("show_training_dialog", False):
+    render_training_dialog()
 
 with st.sidebar.expander("Dane", expanded=True):
     stale_path = st.session_state["stale_path"]

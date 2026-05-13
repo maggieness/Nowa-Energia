@@ -890,6 +890,9 @@ st.markdown("""
     }
 
     [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         width: 100%;
         min-width: 0;
         max-width: 100%;
@@ -912,9 +915,11 @@ st.markdown("""
     [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button::after {
         content: "Wgraj";
         color: #31263d;
-        font-size: 0.78rem;
+        font-size: 0.86rem;
         font-weight: 800;
         line-height: 1;
+        text-align: center;
+        width: 100%;
     }
 
     [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] *,
@@ -1354,13 +1359,6 @@ with st.sidebar.expander("Dane", expanded=True):
         "Brygady",
         "planowanie_brygad_HR.xlsx",
         ["xlsx"],
-    )
-    render_data_upload(
-        "rdm",
-        "Rejestr awarii RDM",
-        "rdm_awarie_do_klasyfikacji_harmonogramu.xlsx",
-        ["xlsx", "xls", "csv"],
-        on_upload=classify_rdm_report,
     )
     
     session_files = st.session_state["uploaded_session_files"]

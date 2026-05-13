@@ -2169,74 +2169,25 @@ elif active_page == "Zarządzanie Harmonogramem":
 
             with st.expander("Edytuj harmonogram", expanded=True):
                 st.write("Zmień wartości w tabeli i kliknij Zapisz zmiany w harmonogramie.")
-                emergency_mask = get_emergency_mask(plan_df)
-                emergency_rows = plan_df[emergency_mask].copy()
-                if not emergency_rows.empty:
-                    if "data" in emergency_rows.columns:
-                        emergency_rows["data"] = pd.to_datetime(emergency_rows["data"], errors="coerce")
-                        emergency_rows = emergency_rows.sort_values(
-                            [column for column in ["data", "priorytet", "id_zadania"] if column in emergency_rows.columns],
-                            kind="stable",
-                        )
-
-                    st.markdown("**Awarie RDM do dodania do harmonogramu**")
-                    st.write("Awarie dodane z rejestru RDM są oznaczone na czerwono. Możesz zaznaczyć wszystkie naraz albo wybrane pozycje.")
-                    show_plan_grid(emergency_rows)
-
-                    pending_emergency_rows = emergency_rows[emergency_rows["status"].astype(str) != "Zatwierdzony"] if "status" in emergency_rows.columns else emergency_rows
-                    if pending_emergency_rows.empty:
-                        st.success("Wszystkie awarie RDM w harmonogramie są już dodane i zatwierdzone.")
-                    else:
-                        select_all_emergencies = st.checkbox(
-                            "Zaznacz wszystko",
-                            key=f"select_all_rdm_emergencies_{st.session_state['schedule_editor_version']}",
-                        )
-                        approval_table = pending_emergency_rows.copy()
-                        approval_table.insert(0, "Dodaj", bool(select_all_emergencies))
-
-                        approval_columns = [
-                            "Dodaj",
-                            "data",
-                            "id_zadania",
-                            "nazwa_zadania",
-                            "brygada",
-                            "zaplanowane_godziny",
-                            "priorytet",
-                            "status",
-                        ]
-                        approval_columns = [column for column in approval_columns if column in approval_table.columns]
-                        edited_approval_table = st.data_editor(
-                            approval_table[approval_columns],
-                            hide_index=True,
-                            use_container_width=True,
-                            key=f"rdm_approval_editor_{st.session_state['schedule_editor_version']}_{bool(select_all_emergencies)}",
-                            disabled=[column for column in approval_columns if column != "Dodaj"],
-                            column_config={
-                                "Dodaj": st.column_config.CheckboxColumn("Dodaj", help="Zaznacz awarię do dodania do harmonogramu"),
-                                "data": st.column_config.DateColumn("Data"),
-                                "id_zadania": st.column_config.TextColumn("ID"),
-                                "nazwa_zadania": st.column_config.TextColumn("Awaria", width="large"),
-                                "brygada": st.column_config.TextColumn("Brygada"),
-                                "zaplanowane_godziny": st.column_config.NumberColumn("Godziny", format="%.1f"),
-                                "priorytet": st.column_config.NumberColumn("Priorytet"),
-                                "status": st.column_config.TextColumn("Status"),
-                            },
-                        )
-                        selected_indices = edited_approval_table.loc[
-                            edited_approval_table["Dodaj"].fillna(False),
-                            "id_zadania",
-                        ].tolist()
-                        if st.button("Dodaj do harmonogramu", disabled=not selected_indices, use_container_width=True):
-                            approved_count = approve_emergency_task_ids(selected_indices)
-                            st.success(f"Dodano do harmonogramu awarie RDM: {approved_count}.")
-                            st.rerun()
-
                 editable_plan = filter_plan_table(plan_df, "schedule_edit")
                 if "data" in editable_plan.columns:
                     editable_plan["data"] = pd.to_datetime(editable_plan["data"], errors="coerce")
                 if "data_wymagana" in editable_plan.columns:
                     editable_plan["data_wymagana"] = pd.to_datetime(editable_plan["data_wymagana"], errors="coerce")
                 editable_plan = mark_emergency_source(editable_plan)
+                emergency_mask = editable_plan["Źródło"].astype(str).str.lower() == "awaria"
+                pending_emergency_mask = emergency_mask & (editable_plan["status"].astype(str) != "Zatwierdzony")
+                if emergency_mask.any():
+                    st.write("Awarie dodane z rejestru RDM są oznaczone na czerwono. Zaznacz awarie checkboxem w tym gridzie i kliknij Dodaj do harmonogramu.")
+                select_all_emergencies = False
+                if pending_emergency_mask.any():
+                    select_all_emergencies = st.checkbox(
+                        "Zaznacz wszystkie awarie",
+                        key=f"select_all_rdm_emergencies_{st.session_state['schedule_editor_version']}",
+                    )
+                editable_plan.insert(0, "Dodaj", False)
+                if select_all_emergencies:
+                    editable_plan.loc[pending_emergency_mask, "Dodaj"] = True
                 styled_editable_plan = editable_plan.style.apply(highlight_emergency_editor_rows, axis=1)
 
                 with st.form("schedule_edit_form"):
@@ -2248,6 +2199,7 @@ elif active_page == "Zarządzanie Harmonogramem":
                         key=f"schedule_editor_{st.session_state['schedule_editor_version']}",
                         disabled=["Źródło"],
                         column_config={
+                            "Dodaj": st.column_config.CheckboxColumn("Dodaj", help="Zaznacz awarię RDM do dodania do harmonogramu"),
                             "Źródło": st.column_config.TextColumn("Źródło"),
                             "data": st.column_config.DateColumn("data"),
                             "data_wymagana": st.column_config.DateColumn("data_wymagana"),
@@ -2259,9 +2211,20 @@ elif active_page == "Zarządzanie Harmonogramem":
                             "zrodlo_zadania": None,
                         },
                     )
-                    save_schedule = st.form_submit_button("Zapisz zmiany w harmonogramie")
+                    form_cols = st.columns(2)
+                    save_schedule = form_cols[0].form_submit_button("Zapisz zmiany w harmonogramie")
+                    add_selected_emergencies = form_cols[1].form_submit_button("Dodaj do harmonogramu")
 
-                if save_schedule:
+                if save_schedule or add_selected_emergencies:
+                    selected_emergency_ids = []
+                    if "Dodaj" in edited_plan.columns and "id_zadania" in edited_plan.columns:
+                        selected_emergency_ids = edited_plan.loc[
+                            edited_plan["Dodaj"].fillna(False)
+                            & (edited_plan["Źródło"].astype(str).str.lower() == "awaria"),
+                            "id_zadania",
+                        ].tolist()
+                    if "Dodaj" in edited_plan.columns:
+                        edited_plan = edited_plan.drop(columns=["Dodaj"])
                     if "Źródło" in edited_plan.columns:
                         edited_plan = edited_plan.drop(columns=["Źródło"])
                     if "data" in edited_plan.columns:
@@ -2290,7 +2253,11 @@ elif active_page == "Zarządzanie Harmonogramem":
                             ignore_index=True,
                         )
                     save_current_results_to_excel()
-                    st.success("Harmonogram zapisany. Możesz go teraz sprawdzić i zatwierdzić.")
+                    if add_selected_emergencies:
+                        approved_count = approve_emergency_task_ids(selected_emergency_ids)
+                        st.success(f"Dodano do harmonogramu awarie RDM: {approved_count}.")
+                    else:
+                        st.success("Harmonogram zapisany. Możesz go teraz sprawdzić i zatwierdzić.")
                     st.rerun()
 
 elif active_page == "Rejestr Awarii":

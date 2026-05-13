@@ -1067,7 +1067,12 @@ def mark_emergency_source(plan_df):
 def highlight_emergency_editor_rows(row):
     if str(row.get("Źródło", "")).lower() != "awaria":
         return [""] * len(row)
-    return ["background-color: #ffe4e6; color: #7f1d1d; border-color: #fecdd3; font-weight: 650;" for _ in row]
+    return [
+        "background-color: #ffe4e6; color: #7f1d1d; border-color: #fecdd3; font-weight: 650;"
+        if column == "RDM"
+        else ""
+        for column in row.index
+    ]
 
 
 def get_emergency_mask(plan_df):
@@ -2274,6 +2279,7 @@ elif active_page == "Zarządzanie Harmonogramem":
                         key=f"select_all_rdm_emergencies_{st.session_state['schedule_editor_version']}",
                     )
                 editable_plan.insert(0, "Dodaj", False)
+                editable_plan.insert(1, "RDM", emergency_mask.map({True: "AWARIA RDM", False: ""}))
                 if select_all_emergencies:
                     editable_plan.loc[pending_emergency_mask, "Dodaj"] = True
                 styled_editable_plan = editable_plan.style.apply(highlight_emergency_editor_rows, axis=1)
@@ -2285,9 +2291,10 @@ elif active_page == "Zarządzanie Harmonogramem":
                         use_container_width=True,
                         num_rows="dynamic",
                         key=f"schedule_editor_{st.session_state['schedule_editor_version']}",
-                        disabled=["Źródło"],
+                        disabled=["RDM", "Źródło"],
                         column_config={
                             "Dodaj": st.column_config.CheckboxColumn("Dodaj", help="Zaznacz awarię RDM do dodania do harmonogramu"),
+                            "RDM": st.column_config.TextColumn("RDM"),
                             "Źródło": st.column_config.TextColumn("Źródło"),
                             "data": st.column_config.DateColumn("data"),
                             "data_wymagana": st.column_config.DateColumn("data_wymagana"),
@@ -2313,6 +2320,8 @@ elif active_page == "Zarządzanie Harmonogramem":
                         ].tolist()
                     if "Dodaj" in edited_plan.columns:
                         edited_plan = edited_plan.drop(columns=["Dodaj"])
+                    if "RDM" in edited_plan.columns:
+                        edited_plan = edited_plan.drop(columns=["RDM"])
                     if "Źródło" in edited_plan.columns:
                         edited_plan = edited_plan.drop(columns=["Źródło"])
                     if "data" in edited_plan.columns:

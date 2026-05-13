@@ -1,0 +1,499 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" targetNamespace="http://bpmn.io/schema/bpmn" exporter="bpmn-js (https://demo.bpmn.io)" exporterVersion="18.13.2">
+  <collaboration id="Collaboration_01">
+    <participant id="Participant_Process" name="Proces: Harmonogramowanie bieżących prac eksploatacyjnych i inwestycyjnych" processRef="Process_01" />
+  </collaboration>
+  <process id="Process_01" isExecutable="false">
+    <laneSet id="LaneSet_01">
+      <lane id="Lane_Crews" name="Brygady własne">
+        <flowNodeRef>Task_Perform_Works</flowNodeRef>
+      </lane>
+      <lane id="Lane_RDM" name="Dyżurny RDM">
+        <flowNodeRef>Task_Register_FailuresRDM</flowNodeRef>
+      </lane>
+      <lane id="Lane_HRData" name="HR / dane dostępności i kompetencji">
+        <flowNodeRef>Task_Update_AvailabilityData</flowNodeRef>
+      </lane>
+      <lane id="Lane_ExecutionManager" name="Kierownik wykonawstwa">
+        <flowNodeRef>Task_Receive_MonthlyPlan</flowNodeRef>
+        <flowNodeRef>Task_Collect_PlanningData</flowNodeRef>
+        <flowNodeRef>Task_Verify_CompetencesAvailability</flowNodeRef>
+        <flowNodeRef>GW_XOR_TasksAssignable</flowNodeRef>
+        <flowNodeRef>Task_Build_MonthlySchedule</flowNodeRef>
+        <flowNodeRef>Task_Mark_TasksForDecision</flowNodeRef>
+        <flowNodeRef>GW_XOR_MergeAfterAssignment</flowNodeRef>
+        <flowNodeRef>Event_Catch_DayStart</flowNodeRef>
+        <flowNodeRef>Task_Check_FailuresAbsences</flowNodeRef>
+        <flowNodeRef>GW_XOR_DisruptionDetected</flowNodeRef>
+        <flowNodeRef>GW_XOR_EmergencyNecessary</flowNodeRef>
+        <flowNodeRef>GW_XOR_MergeAfterDisruption</flowNodeRef>
+        <flowNodeRef>Task_Communicate_Assignments</flowNodeRef>
+        <flowNodeRef>GW_XOR_EndOfMonth</flowNodeRef>
+        <flowNodeRef>Task_Prepare_UnrealizedTasks</flowNodeRef>
+        <flowNodeRef>Gateway_1hbcz6k</flowNodeRef>
+        <flowNodeRef>Gateway_1tx85yp</flowNodeRef>
+        <flowNodeRef>Task_Replan_DaySchedule</flowNodeRef>
+        <flowNodeRef>Task_Record_EmergencyDeferred</flowNodeRef>
+      </lane>
+      <lane id="Lane_PlanningDept" name="Dział planowania">
+        <flowNodeRef>Event_Start_PlanningCycle</flowNodeRef>
+        <flowNodeRef>Task_Prepare_AnnualPlan</flowNodeRef>
+        <flowNodeRef>Task_Send_MonthlyPlan</flowNodeRef>
+        <flowNodeRef>Task_Send_UnrealizedTasks</flowNodeRef>
+        <flowNodeRef>Event_End_PlanningCycle</flowNodeRef>
+      </lane>
+    </laneSet>
+    <startEvent id="Event_Start_PlanningCycle" name="Rozpoczęcie cyklu planowania" />
+    <task id="Task_Prepare_AnnualPlan" name="Przygotowuje plan roczny i rozbija na 12 miesięcy" />
+    <task id="Task_Send_MonthlyPlan" name="Przekazuje plan miesięczny zadań" />
+    <task id="Task_Receive_MonthlyPlan" name="Odbiera plan miesięczny" />
+    <task id="Task_Collect_PlanningData" name="Zbiera dane do harmonogramowania" />
+    <task id="Task_Verify_CompetencesAvailability" name="Weryfikuje dostępność i kompetencje brygad" />
+    <exclusiveGateway id="GW_XOR_TasksAssignable" name="Czy zadania można przypisać?" />
+    <task id="Task_Build_MonthlySchedule" name="Układa harmonogram miesięczny w Excelu" />
+    <task id="Task_Mark_TasksForDecision" name="Oznacza zadania wymagające decyzji lub przesunięcia" />
+    <exclusiveGateway id="GW_XOR_MergeAfterAssignment" name="Połączenie ścieżek przypisania" />
+    <intermediateCatchEvent id="Event_Catch_DayStart" name="Początek dnia pracy">
+      <outgoing>Flow_1lmpmnv</outgoing>
+    </intermediateCatchEvent>
+    <task id="Task_Register_FailuresRDM" name="Wpisuje awarie do aplikacji lub dziennika RDM">
+      <incoming>Flow_1bcw1ed</incoming>
+      <outgoing>Flow_0ot0tvy</outgoing>
+    </task>
+    <task id="Task_Check_FailuresAbsences" name="Sprawdza awarie i absencje">
+      <incoming>Flow_0gj0kjl</incoming>
+    </task>
+    <exclusiveGateway id="GW_XOR_DisruptionDetected" name="Czy wystąpiła awaria lub absencja?" />
+    <exclusiveGateway id="GW_XOR_EmergencyNecessary" name="Czy zadanie awaryjne wymaga realizacji?" />
+    <exclusiveGateway id="GW_XOR_MergeAfterDisruption" name="Połączenie ścieżek dziennych" />
+    <task id="Task_Communicate_Assignments" name="Przekazuje brygadom zadania do realizacji" />
+    <task id="Task_Perform_Works" name="Realizują prace na sieci" />
+    <exclusiveGateway id="GW_XOR_EndOfMonth" name="Czy zakończono miesiąc?" />
+    <task id="Task_Prepare_UnrealizedTasks" name="Przygotowuje informację o zadaniach niezrealizowanych" />
+    <task id="Task_Send_UnrealizedTasks" name="Przekazuje informację do działu planowania" />
+    <endEvent id="Event_End_PlanningCycle" name="Zakończenie cyklu miesięcznego" />
+    <dataObjectReference id="DOR_MonthlyPlan" name="Miesięczny plan zadań" dataObjectRef="DO_MonthlyPlan" />
+    <dataObject id="DO_MonthlyPlan" name="Miesięczny plan zadań" />
+    <dataObjectReference id="DOR_TaskCatalog" name="Katalog zadań" dataObjectRef="DO_TaskCatalog" />
+    <dataObject id="DO_TaskCatalog" name="Katalog zadań" />
+    <dataObjectReference id="DOR_PlanningParameters" name="Parametry planowania i słowniki" dataObjectRef="DO_PlanningParameters" />
+    <dataObject id="DO_PlanningParameters" name="Parametry planowania i słowniki" />
+    <dataObjectReference id="DOR_RDMFailures" name="Zgłoszenia awaryjne RDM" dataObjectRef="DO_RDMFailures" />
+    <dataObject id="DO_RDMFailures" name="Zgłoszenia awaryjne RDM" />
+    <dataObjectReference id="DOR_UnrealizedTasks" name="Informacja o zadaniach niezrealizowanych" dataObjectRef="DO_UnrealizedTasks" />
+    <dataObject id="DO_UnrealizedTasks" name="Informacja o zadaniach niezrealizowanych" />
+    <dataObjectReference id="DOR_MonthlySchedule" name="Harmonogram miesięczny prac brygad" dataObjectRef="DO_MonthlySchedule" />
+    <dataObject id="DO_MonthlySchedule" name="Harmonogram miesięczny prac brygad" />
+    <dataObjectReference id="DOR_HRCompetences" name="Dane o kompetencjach pracowników" dataObjectRef="DO_HRCompetences" />
+    <dataObject id="DO_HRCompetences" name="Dane o kompetencjach pracowników" />
+    <dataObjectReference id="DOR_AvailabilityCalendar" name="Kalendarz dostępności brygad" dataObjectRef="DO_AvailabilityCalendar" />
+    <dataObject id="DO_AvailabilityCalendar" name="Kalendarz dostępności brygad" />
+    <parallelGateway id="Gateway_1hbcz6k">
+      <incoming>Flow_1lmpmnv</incoming>
+      <outgoing>Flow_069soxn</outgoing>
+      <outgoing>Flow_1bcw1ed</outgoing>
+    </parallelGateway>
+    <task id="Task_Update_AvailabilityData" name="Aktualizuje dane o absencjach i dostępności">
+      <incoming>Flow_069soxn</incoming>
+      <outgoing>Flow_02rnegr</outgoing>
+    </task>
+    <parallelGateway id="Gateway_1tx85yp">
+      <incoming>Flow_0ot0tvy</incoming>
+      <incoming>Flow_02rnegr</incoming>
+      <outgoing>Flow_0gj0kjl</outgoing>
+    </parallelGateway>
+    <task id="Task_Replan_DaySchedule" name="Przeplanowuje dzień i przesuwa prace planowe" />
+    <task id="Task_Record_EmergencyDeferred" name="Odkłada zadanie awaryjne bez skierowania do realizacji" />
+    <dataObjectReference id="DOR_DailySchedule" name="Zaktualizowany harmonogram dnia" dataObjectRef="DO_DailySchedule" />
+    <dataObject id="DO_DailySchedule" name="Zaktualizowany harmonogram dnia" />
+    <sequenceFlow id="Flow_Start_PrepareAnnualPlan" sourceRef="Event_Start_PlanningCycle" targetRef="Task_Prepare_AnnualPlan" />
+    <sequenceFlow id="Flow_PrepareAnnualPlan_SendMonthlyPlan" sourceRef="Task_Prepare_AnnualPlan" targetRef="Task_Send_MonthlyPlan" />
+    <sequenceFlow id="Flow_SendMonthlyPlan_ReceiveMonthlyPlan" sourceRef="Task_Send_MonthlyPlan" targetRef="Task_Receive_MonthlyPlan" />
+    <sequenceFlow id="Flow_ReceiveMonthlyPlan_CollectPlanningData" sourceRef="Task_Receive_MonthlyPlan" targetRef="Task_Collect_PlanningData" />
+    <sequenceFlow id="Flow_CollectPlanningData_VerifyCompetencesAvailability" sourceRef="Task_Collect_PlanningData" targetRef="Task_Verify_CompetencesAvailability" />
+    <sequenceFlow id="Flow_VerifyCompetencesAvailability_TasksAssignable" sourceRef="Task_Verify_CompetencesAvailability" targetRef="GW_XOR_TasksAssignable" />
+    <sequenceFlow id="Flow_TasksAssignable_BuildMonthlySchedule" name="tak" sourceRef="GW_XOR_TasksAssignable" targetRef="Task_Build_MonthlySchedule" />
+    <sequenceFlow id="Flow_TasksAssignable_MarkTasksForDecision" name="nie" sourceRef="GW_XOR_TasksAssignable" targetRef="Task_Mark_TasksForDecision" />
+    <sequenceFlow id="Flow_BuildMonthlySchedule_MergeAfterAssignment" sourceRef="Task_Build_MonthlySchedule" targetRef="GW_XOR_MergeAfterAssignment" />
+    <sequenceFlow id="Flow_MarkTasksForDecision_MergeAfterAssignment" sourceRef="Task_Mark_TasksForDecision" targetRef="GW_XOR_MergeAfterAssignment" />
+    <sequenceFlow id="Flow_MergeAfterAssignment_DayStart" sourceRef="GW_XOR_MergeAfterAssignment" targetRef="Event_Catch_DayStart" />
+    <sequenceFlow id="Flow_EndOfMonth_DayStart" name="nie" sourceRef="GW_XOR_EndOfMonth" targetRef="Event_Catch_DayStart" />
+    <sequenceFlow id="Flow_1lmpmnv" sourceRef="Event_Catch_DayStart" targetRef="Gateway_1hbcz6k" />
+    <sequenceFlow id="Flow_1bcw1ed" sourceRef="Gateway_1hbcz6k" targetRef="Task_Register_FailuresRDM" />
+    <sequenceFlow id="Flow_0ot0tvy" sourceRef="Task_Register_FailuresRDM" targetRef="Gateway_1tx85yp" />
+    <sequenceFlow id="Flow_0gj0kjl" sourceRef="Gateway_1tx85yp" targetRef="Task_Check_FailuresAbsences" />
+    <sequenceFlow id="Flow_CheckFailuresAbsences_DisruptionDetected" sourceRef="Task_Check_FailuresAbsences" targetRef="GW_XOR_DisruptionDetected" />
+    <sequenceFlow id="Flow_DisruptionDetected_MergeAfterDisruption" name="nie" sourceRef="GW_XOR_DisruptionDetected" targetRef="GW_XOR_MergeAfterDisruption" />
+    <sequenceFlow id="Flow_DisruptionDetected_EmergencyNecessary" name="tak" sourceRef="GW_XOR_DisruptionDetected" targetRef="GW_XOR_EmergencyNecessary" />
+    <sequenceFlow id="Flow_EmergencyNecessary_ReplanDaySchedule" name="tak" sourceRef="GW_XOR_EmergencyNecessary" targetRef="Task_Replan_DaySchedule" />
+    <sequenceFlow id="Flow_EmergencyNecessary_RecordEmergencyDeferred" name="nie" sourceRef="GW_XOR_EmergencyNecessary" targetRef="Task_Record_EmergencyDeferred" />
+    <sequenceFlow id="Flow_ReplanDaySchedule_MergeAfterDisruption" sourceRef="Task_Replan_DaySchedule" targetRef="GW_XOR_MergeAfterDisruption" />
+    <sequenceFlow id="Flow_RecordEmergencyDeferred_MergeAfterDisruption" sourceRef="Task_Record_EmergencyDeferred" targetRef="GW_XOR_MergeAfterDisruption" />
+    <sequenceFlow id="Flow_MergeAfterDisruption_CommunicateAssignments" sourceRef="GW_XOR_MergeAfterDisruption" targetRef="Task_Communicate_Assignments" />
+    <sequenceFlow id="Flow_CommunicateAssignments_PerformWorks" sourceRef="Task_Communicate_Assignments" targetRef="Task_Perform_Works" />
+    <sequenceFlow id="Flow_PerformWorks_EndOfMonth" sourceRef="Task_Perform_Works" targetRef="GW_XOR_EndOfMonth" />
+    <sequenceFlow id="Flow_EndOfMonth_PrepareUnrealizedTasks" name="tak" sourceRef="GW_XOR_EndOfMonth" targetRef="Task_Prepare_UnrealizedTasks" />
+    <sequenceFlow id="Flow_PrepareUnrealizedTasks_SendUnrealizedTasks" sourceRef="Task_Prepare_UnrealizedTasks" targetRef="Task_Send_UnrealizedTasks" />
+    <sequenceFlow id="Flow_SendUnrealizedTasks_End" sourceRef="Task_Send_UnrealizedTasks" targetRef="Event_End_PlanningCycle" />
+    <sequenceFlow id="Flow_069soxn" sourceRef="Gateway_1hbcz6k" targetRef="Task_Update_AvailabilityData" />
+    <sequenceFlow id="Flow_02rnegr" sourceRef="Task_Update_AvailabilityData" targetRef="Gateway_1tx85yp" />
+  </process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Collaboration_01">
+      <bpmndi:BPMNShape id="Shape_Participant_Process" bpmnElement="Participant_Process" isHorizontal="true">
+        <omgdc:Bounds x="160" y="85" width="4300" height="1250" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Lane_Crews" bpmnElement="Lane_Crews" isHorizontal="true">
+        <omgdc:Bounds x="180" y="1085" width="4280" height="250" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Lane_RDM" bpmnElement="Lane_RDM" isHorizontal="true">
+        <omgdc:Bounds x="180" y="835" width="4280" height="250" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Lane_HRData" bpmnElement="Lane_HRData" isHorizontal="true">
+        <omgdc:Bounds x="180" y="585" width="4280" height="250" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Lane_ExecutionManager" bpmnElement="Lane_ExecutionManager" isHorizontal="true">
+        <omgdc:Bounds x="180" y="335" width="4280" height="250" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Lane_PlanningDept" bpmnElement="Lane_PlanningDept" isHorizontal="true">
+        <omgdc:Bounds x="180" y="85" width="4280" height="250" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Event_Start_PlanningCycle" bpmnElement="Event_Start_PlanningCycle">
+        <omgdc:Bounds x="262" y="192" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="238" y="228" width="84" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_Prepare_AnnualPlan" bpmnElement="Task_Prepare_AnnualPlan">
+        <omgdc:Bounds x="410" y="170" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_Send_MonthlyPlan" bpmnElement="Task_Send_MonthlyPlan">
+        <omgdc:Bounds x="590" y="170" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_Receive_MonthlyPlan" bpmnElement="Task_Receive_MonthlyPlan">
+        <omgdc:Bounds x="770" y="420" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_Collect_PlanningData" bpmnElement="Task_Collect_PlanningData">
+        <omgdc:Bounds x="950" y="420" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_Verify_CompetencesAvailability" bpmnElement="Task_Verify_CompetencesAvailability">
+        <omgdc:Bounds x="1130" y="420" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_GW_XOR_TasksAssignable" bpmnElement="GW_XOR_TasksAssignable" isMarkerVisible="true">
+        <omgdc:Bounds x="1335" y="435" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="1316" y="485" width="89" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_Build_MonthlySchedule" bpmnElement="Task_Build_MonthlySchedule">
+        <omgdc:Bounds x="1490" y="420" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_Mark_TasksForDecision" bpmnElement="Task_Mark_TasksForDecision">
+        <omgdc:Bounds x="1490" y="520" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_GW_XOR_MergeAfterAssignment" bpmnElement="GW_XOR_MergeAfterAssignment" isMarkerVisible="true">
+        <omgdc:Bounds x="1695" y="435" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="1692" y="485" width="56" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Event_Catch_DayStart" bpmnElement="Event_Catch_DayStart">
+        <omgdc:Bounds x="1882" y="442" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="1865" y="404.5" width="70" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_Register_FailuresRDM" bpmnElement="Task_Register_FailuresRDM">
+        <omgdc:Bounds x="2030" y="920" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_Check_FailuresAbsences" bpmnElement="Task_Check_FailuresAbsences">
+        <omgdc:Bounds x="2390" y="420" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_GW_XOR_DisruptionDetected" bpmnElement="GW_XOR_DisruptionDetected" isMarkerVisible="true">
+        <omgdc:Bounds x="2595" y="435" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="2586" y="485" width="68" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_GW_XOR_EmergencyNecessary" bpmnElement="GW_XOR_EmergencyNecessary" isMarkerVisible="true">
+        <omgdc:Bounds x="2775" y="435" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="2755" y="385" width="89" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_GW_XOR_MergeAfterDisruption" bpmnElement="GW_XOR_MergeAfterDisruption" isMarkerVisible="true">
+        <omgdc:Bounds x="3135" y="435" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="3115" y="485" width="90" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_Communicate_Assignments" bpmnElement="Task_Communicate_Assignments">
+        <omgdc:Bounds x="3290" y="420" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_Perform_Works" bpmnElement="Task_Perform_Works">
+        <omgdc:Bounds x="3470" y="1170" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_GW_XOR_EndOfMonth" bpmnElement="GW_XOR_EndOfMonth" isMarkerVisible="true">
+        <omgdc:Bounds x="3675" y="435" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="3660" y="485" width="81" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_Prepare_UnrealizedTasks" bpmnElement="Task_Prepare_UnrealizedTasks">
+        <omgdc:Bounds x="3830" y="420" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_Send_UnrealizedTasks" bpmnElement="Task_Send_UnrealizedTasks">
+        <omgdc:Bounds x="4010" y="170" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Event_End_PlanningCycle" bpmnElement="Event_End_PlanningCycle">
+        <omgdc:Bounds x="4222" y="192" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="4206" y="228" width="68" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_DOR_MonthlyPlan" bpmnElement="DOR_MonthlyPlan">
+        <omgdc:Bounds x="622" y="270" width="36" height="50" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="601" y="322" width="79" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_DOR_TaskCatalog" bpmnElement="DOR_TaskCatalog">
+        <omgdc:Bounds x="982" y="520" width="36" height="50" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="965" y="572" width="71" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_DOR_PlanningParameters" bpmnElement="DOR_PlanningParameters">
+        <omgdc:Bounds x="1072" y="520" width="36" height="50" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="1064" y="572" width="62" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_DOR_RDMFailures" bpmnElement="DOR_RDMFailures">
+        <omgdc:Bounds x="2062" y="1020" width="36" height="50" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="2049" y="1072" width="73" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_DOR_UnrealizedTasks" bpmnElement="DOR_UnrealizedTasks">
+        <omgdc:Bounds x="3922" y="520" width="36" height="50" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="3900" y="572" width="90" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_DOR_MonthlySchedule" bpmnElement="DOR_MonthlySchedule">
+        <omgdc:Bounds x="1522" y="315" width="36" height="50" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="1500" y="370" width="80" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_DOR_HRCompetences" bpmnElement="DOR_HRCompetences">
+        <omgdc:Bounds x="2042" y="705" width="36" height="50" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="2023" y="757" width="74" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_DOR_AvailabilityCalendar" bpmnElement="DOR_AvailabilityCalendar">
+        <omgdc:Bounds x="2112" y="705" width="36" height="50" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="2105" y="757" width="60" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_1hbcz6k_di" bpmnElement="Gateway_1hbcz6k">
+        <omgdc:Bounds x="1935" y="435" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_Update_AvailabilityData" bpmnElement="Task_Update_AvailabilityData">
+        <omgdc:Bounds x="2030" y="600" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_1tx85yp_di" bpmnElement="Gateway_1tx85yp">
+        <omgdc:Bounds x="2275" y="435" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_Replan_DaySchedule" bpmnElement="Task_Replan_DaySchedule">
+        <omgdc:Bounds x="2930" y="500" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_Task_Record_EmergencyDeferred" bpmnElement="Task_Record_EmergencyDeferred">
+        <omgdc:Bounds x="2930" y="390" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Shape_DOR_DailySchedule" bpmnElement="DOR_DailySchedule">
+        <omgdc:Bounds x="2972" y="595" width="36" height="50" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="2957" y="647" width="76" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Edge_Flow_Start_PrepareAnnualPlan" bpmnElement="Flow_Start_PrepareAnnualPlan">
+        <omgdi:waypoint x="298" y="210" />
+        <omgdi:waypoint x="410" y="210" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_PrepareAnnualPlan_SendMonthlyPlan" bpmnElement="Flow_PrepareAnnualPlan_SendMonthlyPlan">
+        <omgdi:waypoint x="510" y="210" />
+        <omgdi:waypoint x="590" y="210" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_SendMonthlyPlan_ReceiveMonthlyPlan" bpmnElement="Flow_SendMonthlyPlan_ReceiveMonthlyPlan">
+        <omgdi:waypoint x="690" y="210" />
+        <omgdi:waypoint x="730" y="210" />
+        <omgdi:waypoint x="730" y="460" />
+        <omgdi:waypoint x="770" y="460" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_ReceiveMonthlyPlan_CollectPlanningData" bpmnElement="Flow_ReceiveMonthlyPlan_CollectPlanningData">
+        <omgdi:waypoint x="870" y="460" />
+        <omgdi:waypoint x="950" y="460" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_CollectPlanningData_VerifyCompetencesAvailability" bpmnElement="Flow_CollectPlanningData_VerifyCompetencesAvailability">
+        <omgdi:waypoint x="1050" y="460" />
+        <omgdi:waypoint x="1130" y="460" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_VerifyCompetencesAvailability_TasksAssignable" bpmnElement="Flow_VerifyCompetencesAvailability_TasksAssignable">
+        <omgdi:waypoint x="1230" y="460" />
+        <omgdi:waypoint x="1335" y="460" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_TasksAssignable_BuildMonthlySchedule" bpmnElement="Flow_TasksAssignable_BuildMonthlySchedule">
+        <omgdi:waypoint x="1385" y="460" />
+        <omgdi:waypoint x="1490" y="460" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="1430" y="435" width="15" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_TasksAssignable_MarkTasksForDecision" bpmnElement="Flow_TasksAssignable_MarkTasksForDecision">
+        <omgdi:waypoint x="1360" y="485" />
+        <omgdi:waypoint x="1360" y="560" />
+        <omgdi:waypoint x="1490" y="560" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="1368" y="513" width="15" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_MarkTasksForDecision_MergeAfterAssignment" bpmnElement="Flow_MarkTasksForDecision_MergeAfterAssignment">
+        <omgdi:waypoint x="1590" y="560" />
+        <omgdi:waypoint x="1660" y="560" />
+        <omgdi:waypoint x="1660" y="460" />
+        <omgdi:waypoint x="1695" y="460" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_BuildMonthlySchedule_MergeAfterAssignment" bpmnElement="Flow_BuildMonthlySchedule_MergeAfterAssignment">
+        <omgdi:waypoint x="1590" y="460" />
+        <omgdi:waypoint x="1695" y="460" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_MergeAfterAssignment_DayStart" bpmnElement="Flow_MergeAfterAssignment_DayStart">
+        <omgdi:waypoint x="1745" y="460" />
+        <omgdi:waypoint x="1882" y="460" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_CheckFailuresAbsences_DisruptionDetected" bpmnElement="Flow_CheckFailuresAbsences_DisruptionDetected">
+        <omgdi:waypoint x="2490" y="460" />
+        <omgdi:waypoint x="2595" y="460" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_DisruptionDetected_MergeAfterDisruption" bpmnElement="Flow_DisruptionDetected_MergeAfterDisruption">
+        <omgdi:waypoint x="2620" y="435" />
+        <omgdi:waypoint x="2620" y="380" />
+        <omgdi:waypoint x="3160" y="380" />
+        <omgdi:waypoint x="3160" y="435" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="2883" y="355" width="15" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_DisruptionDetected_EmergencyNecessary" bpmnElement="Flow_DisruptionDetected_EmergencyNecessary">
+        <omgdi:waypoint x="2645" y="460" />
+        <omgdi:waypoint x="2775" y="460" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="2703" y="435" width="15" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_EmergencyNecessary_ReplanDaySchedule" bpmnElement="Flow_EmergencyNecessary_ReplanDaySchedule">
+        <omgdi:waypoint x="2800" y="485" />
+        <omgdi:waypoint x="2800" y="540" />
+        <omgdi:waypoint x="2930" y="540" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="2858" y="515" width="15" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_EmergencyNecessary_RecordEmergencyDeferred" bpmnElement="Flow_EmergencyNecessary_RecordEmergencyDeferred">
+        <omgdi:waypoint x="2825" y="460" />
+        <omgdi:waypoint x="2878" y="460" />
+        <omgdi:waypoint x="2878" y="430" />
+        <omgdi:waypoint x="2930" y="430" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="2906" y="408" width="15" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_ReplanDaySchedule_MergeAfterDisruption" bpmnElement="Flow_ReplanDaySchedule_MergeAfterDisruption">
+        <omgdi:waypoint x="3030" y="540" />
+        <omgdi:waypoint x="3160" y="540" />
+        <omgdi:waypoint x="3160" y="485" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_RecordEmergencyDeferred_MergeAfterDisruption" bpmnElement="Flow_RecordEmergencyDeferred_MergeAfterDisruption">
+        <omgdi:waypoint x="3030" y="430" />
+        <omgdi:waypoint x="3083" y="430" />
+        <omgdi:waypoint x="3083" y="460" />
+        <omgdi:waypoint x="3135" y="460" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_MergeAfterDisruption_CommunicateAssignments" bpmnElement="Flow_MergeAfterDisruption_CommunicateAssignments">
+        <omgdi:waypoint x="3185" y="460" />
+        <omgdi:waypoint x="3290" y="460" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_CommunicateAssignments_PerformWorks" bpmnElement="Flow_CommunicateAssignments_PerformWorks">
+        <omgdi:waypoint x="3390" y="460" />
+        <omgdi:waypoint x="3430" y="460" />
+        <omgdi:waypoint x="3430" y="1210" />
+        <omgdi:waypoint x="3470" y="1210" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_PerformWorks_EndOfMonth" bpmnElement="Flow_PerformWorks_EndOfMonth">
+        <omgdi:waypoint x="3570" y="1210" />
+        <omgdi:waypoint x="3630" y="1210" />
+        <omgdi:waypoint x="3630" y="460" />
+        <omgdi:waypoint x="3675" y="460" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_EndOfMonth_DayStart" bpmnElement="Flow_EndOfMonth_DayStart">
+        <omgdi:waypoint x="3700" y="485" />
+        <omgdi:waypoint x="3700" y="1290" />
+        <omgdi:waypoint x="1900" y="1290" />
+        <omgdi:waypoint x="1900" y="478" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="2793" y="1265" width="15" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_EndOfMonth_PrepareUnrealizedTasks" bpmnElement="Flow_EndOfMonth_PrepareUnrealizedTasks">
+        <omgdi:waypoint x="3725" y="460" />
+        <omgdi:waypoint x="3830" y="460" />
+        <bpmndi:BPMNLabel>
+          <omgdc:Bounds x="3770" y="435" width="15" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_PrepareUnrealizedTasks_SendUnrealizedTasks" bpmnElement="Flow_PrepareUnrealizedTasks_SendUnrealizedTasks">
+        <omgdi:waypoint x="3930" y="460" />
+        <omgdi:waypoint x="3970" y="460" />
+        <omgdi:waypoint x="3970" y="210" />
+        <omgdi:waypoint x="4010" y="210" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Edge_Flow_SendUnrealizedTasks_End" bpmnElement="Flow_SendUnrealizedTasks_End">
+        <omgdi:waypoint x="4110" y="210" />
+        <omgdi:waypoint x="4222" y="210" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0ot0tvy_di" bpmnElement="Flow_0ot0tvy">
+        <omgdi:waypoint x="2130" y="960" />
+        <omgdi:waypoint x="2300" y="960" />
+        <omgdi:waypoint x="2300" y="485" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1lmpmnv_di" bpmnElement="Flow_1lmpmnv">
+        <omgdi:waypoint x="1918" y="460" />
+        <omgdi:waypoint x="1935" y="460" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_069soxn_di" bpmnElement="Flow_069soxn">
+        <omgdi:waypoint x="1960" y="485" />
+        <omgdi:waypoint x="1960" y="640" />
+        <omgdi:waypoint x="2030" y="640" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1bcw1ed_di" bpmnElement="Flow_1bcw1ed">
+        <omgdi:waypoint x="1960" y="485" />
+        <omgdi:waypoint x="1960" y="960" />
+        <omgdi:waypoint x="2030" y="960" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_02rnegr_di" bpmnElement="Flow_02rnegr">
+        <omgdi:waypoint x="2130" y="640" />
+        <omgdi:waypoint x="2300" y="640" />
+        <omgdi:waypoint x="2300" y="485" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0gj0kjl_di" bpmnElement="Flow_0gj0kjl">
+        <omgdi:waypoint x="2325" y="460" />
+        <omgdi:waypoint x="2390" y="460" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>

@@ -1,0 +1,227 @@
+Jesteś seniorem Python Developerem oraz analitykiem biznesowo-systemowym. 
+Twoim zadaniem jest wygenerowanie prototypowego silnika planistycznego, który tworzy miesięczny harmonogram prac brygad na podstawie danych wejściowych z pliku Excel.
+
+Kontekst biznesowy:
+Firma realizuje prace eksploatacyjne i drobne prace inwestycyjne na sieci elektroenergetycznej. Kierownik wykonawstwa otrzymuje miesięczny plan zadań i ręcznie układa harmonogram dla brygad. Prototyp ma automatycznie przygotować propozycję harmonogramu miesięcznego, uwzględniając typ zadania, czasochłonność, wymagane kompetencje, dostępność brygad, terminy sztywne oraz priorytety.
+
+Cel:
+Wygeneruj działający prototyp silnika planistycznego w Pythonie, który:
+1. Wczytuje dane wejściowe z pliku Excel.
+2. Waliduje kompletność danych.
+3. Oblicza pracochłonność zadań.
+4. Dopasowuje zadania do brygad na podstawie kompetencji i dostępności.
+5. Układa harmonogram miesięczny.
+6. Generuje listę zadań niezaplanowanych wraz z powodem.
+7. Eksportuje wynik do pliku Excel.
+
+Założenia techniczne:
+- Język: Python 3.11.
+- Biblioteki: pandas, openpyxl.
+- Bez bazy danych.
+- Bez integracji z systemami zewnętrznymi.
+- Bez użycia LLM w samym silniku planistycznym.
+- Silnik ma być deterministyczny i oparty na regułach.
+- Kod ma być czytelny, podzielony na funkcje i możliwy do dalszej rozbudowy.
+- Nie twórz danych przykładowych w kodzie jako podstawy działania silnika.
+- Jeżeli dane są niekompletne, silnik ma zgłosić błąd walidacyjny albo przenieść zadanie do listy „niezaplanowane”.
+- Nie dopowiadaj reguł biznesowych, które nie wynikają z danych wejściowych. Jeżeli brakuje danych, pokaż to w raporcie błędów lub wyjątków.
+
+Plik wejściowy:
+Silnik ma przyjmować plik Excel o nazwie:
+planowanie_brygad_input.xlsx
+
+Plik wejściowy zawiera arkusze:
+
+1. Arkusz: 01_plan_miesieczny
+Kolumny:
+- id_zadania
+- miesiac
+- typ_pracy
+- id_typu_zadania
+- nazwa_zadania
+- obszar_infrastruktury
+- jednostka
+- ilosc
+- data_wymagana
+- czy_termin_sztywny
+- priorytet
+- uwagi_planistyczne
+
+2. Arkusz: 02_katalog_zadan
+Kolumny:
+- id_typu_zadania
+- typ_pracy
+- nazwa_zadania
+- obszar_infrastruktury
+- jednostka
+- czas_na_jednostke_h
+- minimalna_liczba_osob
+- minimalna_liczba_brygad
+- wymagane_kompetencje
+- czy_wymaga_wylaczenia
+- czy_moze_byc_dzielone
+- czy_moze_byc_przesuniete
+- domyslny_priorytet
+
+3. Arkusz: 03_brygady_pracownicy
+Kolumny:
+- id_pracownika
+- kod_pracownika
+- brygada
+- kompetencje
+- status_pracownika
+
+4. Arkusz: 04_dostepnosc
+Kolumny:
+- data
+- brygada
+- id_pracownika
+- czy_dostepny
+- liczba_dostepnych_godzin
+- powod_niedostepnosci
+
+5. Arkusz: 05_parametry
+Kolumny:
+- parametr
+- wartosc
+
+Wymagane parametry:
+- liczba_godzin_pracy_dziennie
+- maksymalne_obciazenie_proc
+- rezerwa_operacyjna_proc
+- czy_planowac_weekendy
+- domyslna_liczba_godzin_dziennie
+
+6. Arkusz: 06_slowniki
+Ten arkusz może istnieć, ale w pierwszej wersji silnik nie musi z niego korzystać.
+
+Logika planowania:
+
+1. Walidacja:
+- Sprawdź, czy istnieją wszystkie wymagane arkusze.
+- Sprawdź, czy istnieją wszystkie wymagane kolumny.
+- Sprawdź, czy każde zadanie z planu miesięcznego ma odpowiadający rekord w katalogu zadań na podstawie id_typu_zadania.
+- Sprawdź, czy dla każdego zadania istnieje czas_na_jednostke_h.
+- Sprawdź, czy każde zadanie ma ilość większą od 0.
+- Sprawdź, czy każde zadanie ma wymagane kompetencje.
+- Sprawdź, czy istnieją brygady z pracownikami aktywnymi.
+- Sprawdź, czy dostępność pracowników jest określona dla dni roboczych miesiąca.
+
+2. Obliczenie pracochłonności:
+Dla każdego zadania oblicz:
+pracochlonnosc_h = ilosc * czas_na_jednostke_h
+
+3. Kompetencje:
+- Pole wymagane_kompetencje może zawierać listę kompetencji oddzielonych średnikiem.
+- Pole kompetencje pracownika może zawierać listę kompetencji oddzielonych średnikiem.
+- Brygada może wykonać zadanie tylko wtedy, gdy kompetencje dostępnych pracowników w danym dniu pokrywają wszystkie wymagane kompetencje zadania.
+- Jeżeli nie ma brygady z wymaganymi kompetencjami, zadanie trafia do arkusza „niezaplanowane” z powodem: „Brak brygady z wymaganymi kompetencjami”.
+
+4. Dostępność:
+- Brygada jest dostępna danego dnia tylko wtedy, gdy liczba dostępnych pracowników w brygadzie jest co najmniej równa minimalna_liczba_osob dla zadania.
+- Dostępna pojemność brygady danego dnia wynosi suma dostępnych godzin pracowników, ale nie więcej niż limit dzienny wynikający z parametrów.
+- Uwzględnij maksymalne_obciazenie_proc, np. 90%, jako limit planowania.
+- Jeżeli czy_planowac_weekendy = Nie, nie planuj zadań w soboty i niedziele.
+
+5. Priorytety:
+Zadania planuj w następującej kolejności:
+a) zadania z czy_termin_sztywny = Tak i data_wymagana uzupełniona,
+b) zadania inwestycyjne z czy_wymaga_wylaczenia = Tak,
+c) dopuszczenia brygad zewnętrznych, jeżeli typ_pracy wskazuje taki rodzaj,
+d) pozostałe zadania inwestycyjne,
+e) zadania eksploatacyjne,
+f) pozostałe zadania.
+
+W ramach tej samej grupy sortuj po:
+- priorytet,
+- data_wymagana,
+- większa pracochłonność jako pierwsza.
+
+6. Zadania z terminem sztywnym:
+- Jeżeli zadanie ma termin sztywny, próbuj zaplanować je wyłącznie w data_wymagana.
+- Jeżeli nie da się go zaplanować w wymaganym terminie, przenieś je do „niezaplanowane” z powodem: „Brak dostępnej brygady w terminie sztywnym”.
+
+7. Zadania podzielne:
+- Jeżeli czy_moze_byc_dzielone = Tak, zadanie może zostać rozłożone na wiele dni.
+- W harmonogramie pokaż wtedy części zadania jako kolejne wpisy z tym samym id_zadania i numerem części.
+- Jeżeli zadanie nie jest podzielne, musi zmieścić się w jednym dniu pracy jednej brygady.
+
+8. Zadania niepodzielne:
+- Jeżeli zadanie nie mieści się w dostępnej pojemności jednej brygady w jednym dniu, przenieś je do „niezaplanowane” z powodem: „Zadanie niepodzielne przekracza dostępną pojemność dzienną”.
+
+9. Wynik:
+Wygeneruj plik:
+harmonogram_brygad_output.xlsx
+
+Plik wynikowy ma zawierać arkusze:
+
+1. Arkusz: 01_harmonogram
+Kolumny:
+- data
+- brygada
+- id_zadania
+- czesc_zadania
+- typ_pracy
+- nazwa_zadania
+- obszar_infrastruktury
+- ilosc_zaplanowana
+- jednostka
+- zaplanowane_godziny
+- wymagane_kompetencje
+- priorytet
+- czy_termin_sztywny
+- data_wymagana
+- status
+
+2. Arkusz: 02_niezaplanowane
+Kolumny:
+- id_zadania
+- typ_pracy
+- nazwa_zadania
+- pracochlonnosc_h
+- wymagane_kompetencje
+- powod_niezaplanowania
+- rekomendowana_akcja
+
+3. Arkusz: 03_konflikty
+Kolumny:
+- id_zadania
+- typ_konfliktu
+- opis_konfliktu
+- dane_wejsciowe_powiazane
+
+4. Arkusz: 04_obciazenie_brygad
+Kolumny:
+- brygada
+- data
+- dostepne_godziny
+- zaplanowane_godziny
+- wykorzystanie_proc
+
+5. Arkusz: 05_log_decyzji
+Kolumny:
+- id_zadania
+- etap
+- decyzja
+- uzasadnienie
+- data_czas_logu
+
+Wymagania dotyczące kodu:
+- Przygotuj jeden plik Python o nazwie scheduler_engine.py.
+- Kod ma zawierać funkcję główną:
+  run_scheduler(input_path: str, output_path: str) -> None
+- Kod ma być odporny na podstawowe błędy danych.
+- Dodaj komentarze wyjaśniające kluczowe elementy logiki.
+- Dodaj walidację i czytelne komunikaty błędów.
+- Nie używaj losowości.
+- Nie używaj sztucznej inteligencji do podejmowania decyzji.
+- Nie twórz interfejsu użytkownika w pierwszej wersji.
+- Na końcu pokaż przykład uruchomienia:
+  python scheduler_engine.py planowanie_brygad_input.xlsx harmonogram_brygad_output.xlsx
+
+Dostarcz:
+1. Pełny kod pliku scheduler_engine.py.
+2. Krótki opis działania silnika.
+3. Listę założeń przyjętych w kodzie.
+4. Listę ograniczeń prototypu.
+5. Propozycję kolejnych usprawnień.

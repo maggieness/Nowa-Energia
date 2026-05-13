@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+
+*.log
+streamlit_*.log
+
+temp/
+*_output.xlsx
+
+.venv/
+venv/
+
+# Large/private raw media
+*.m4a

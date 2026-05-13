@@ -1019,6 +1019,63 @@ st.markdown("""
         color: #22192b !important;
     }
 
+    [data-testid="stSidebar"] .st-key-reupload_planowanie button,
+    [data-testid="stSidebar"] .st-key-reupload_hr button,
+    [data-testid="stSidebar"] [class*="st-key-planowanie_upload_"] button,
+    [data-testid="stSidebar"] [class*="st-key-hr_upload_"] button,
+    [data-testid="stSidebar"] .st-key-planowanie_upload_0 button,
+    [data-testid="stSidebar"] .st-key-planowanie_upload_1 button,
+    [data-testid="stSidebar"] .st-key-planowanie_upload_2 button,
+    [data-testid="stSidebar"] .st-key-hr_upload_0 button,
+    [data-testid="stSidebar"] .st-key-hr_upload_1 button,
+    [data-testid="stSidebar"] .st-key-hr_upload_2 button {
+        align-items: center !important;
+        background: linear-gradient(180deg, #eadcf0 0%, #dbc7e4 100%) !important;
+        border: 1px solid #c9b1d5 !important;
+        border-radius: 7px !important;
+        color: #31263d !important;
+        display: flex !important;
+        font-size: 0.86rem !important;
+        font-weight: 800 !important;
+        justify-content: center !important;
+        line-height: 1.15 !important;
+        min-height: 2.55rem !important;
+        width: 100% !important;
+    }
+
+    [data-testid="stSidebar"] .st-key-reupload_planowanie button *,
+    [data-testid="stSidebar"] .st-key-reupload_planowanie button p,
+    [data-testid="stSidebar"] .st-key-reupload_hr button *,
+    [data-testid="stSidebar"] .st-key-reupload_hr button p,
+    [data-testid="stSidebar"] [class*="st-key-planowanie_upload_"] button::after,
+    [data-testid="stSidebar"] [class*="st-key-hr_upload_"] button::after,
+    [data-testid="stSidebar"] .st-key-planowanie_upload_0 button::after,
+    [data-testid="stSidebar"] .st-key-planowanie_upload_1 button::after,
+    [data-testid="stSidebar"] .st-key-planowanie_upload_2 button::after,
+    [data-testid="stSidebar"] .st-key-hr_upload_0 button::after,
+    [data-testid="stSidebar"] .st-key-hr_upload_1 button::after,
+    [data-testid="stSidebar"] .st-key-hr_upload_2 button::after {
+        color: #31263d !important;
+        font-size: 0.86rem !important;
+        font-weight: 800 !important;
+        line-height: 1.15 !important;
+    }
+
+    [data-testid="stSidebar"] .st-key-reupload_planowanie button:hover,
+    [data-testid="stSidebar"] .st-key-reupload_hr button:hover,
+    [data-testid="stSidebar"] [class*="st-key-planowanie_upload_"] button:hover,
+    [data-testid="stSidebar"] [class*="st-key-hr_upload_"] button:hover,
+    [data-testid="stSidebar"] .st-key-planowanie_upload_0 button:hover,
+    [data-testid="stSidebar"] .st-key-planowanie_upload_1 button:hover,
+    [data-testid="stSidebar"] .st-key-planowanie_upload_2 button:hover,
+    [data-testid="stSidebar"] .st-key-hr_upload_0 button:hover,
+    [data-testid="stSidebar"] .st-key-hr_upload_1 button:hover,
+    [data-testid="stSidebar"] .st-key-hr_upload_2 button:hover {
+        background: linear-gradient(180deg, #eadcf0 0%, #dbc7e4 100%) !important;
+        border-color: #c9b1d5 !important;
+        color: #31263d !important;
+    }
+
     .st-key-nav_menu {
         display: flex;
         flex-direction: column;

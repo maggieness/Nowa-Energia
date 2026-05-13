@@ -717,7 +717,60 @@ def classify_rdm_report(uploaded_report):
     st.session_state["rdm_classification"] = classified
     st.session_state["rdm_classification_output_path"] = output_path
     st.session_state["rdm_import_summary"] = None
+    st.session_state["rdm_classification_editor_version"] = st.session_state.get("rdm_classification_editor_version", 0) + 1
     return classified
+
+
+def reset_rdm_report_upload():
+    st.session_state["uploaded_emergency_report_meta"] = None
+    st.session_state["rdm_classification"] = None
+    st.session_state["rdm_classification_output_path"] = None
+    st.session_state["rdm_import_summary"] = None
+    st.session_state["emergency_report_version"] = st.session_state.get("emergency_report_version", 0) + 1
+    st.session_state["rdm_classification_editor_version"] = st.session_state.get("rdm_classification_editor_version", 0) + 1
+
+
+def prepare_rdm_classification_editor(classified_df):
+    editor_df = classified_df.copy()
+    editor_df.insert(
+        0,
+        "Do harmonogramu",
+        editor_df.get("wynik_czy_utworzyc_zadanie_planistyczne", pd.Series(dtype=str)).astype(str) == "Tak",
+    )
+    for column in ["data_wymagana", "data_czas_kwalifikacji"]:
+        if column in editor_df.columns:
+            editor_df[column] = pd.to_datetime(editor_df[column], errors="coerce")
+    return editor_df
+
+
+def save_rdm_classification_editor(edited_df):
+    current = st.session_state.get("rdm_classification")
+    if current is None or current.empty:
+        return
+
+    updated = current.copy()
+    edited = edited_df.copy()
+    if "Do harmonogramu" in edited.columns:
+        selected = edited["Do harmonogramu"].fillna(False).astype(bool)
+        edited["wynik_czy_utworzyc_zadanie_planistyczne"] = selected.map({True: "Tak", False: "Nie"})
+        if "wynik_status_raportu" in edited.columns:
+            edited.loc[~selected, "wynik_status_raportu"] = "Niezaplanowane"
+            edited.loc[selected & (edited["wynik_status_raportu"].astype(str) == "Niezaplanowane"), "wynik_status_raportu"] = "Gotowe do importu"
+        edited = edited.drop(columns=["Do harmonogramu"])
+
+    editable_columns = [column for column in edited.columns if column in updated.columns]
+    if "id_zgloszenia_rdm" in edited.columns and "id_zgloszenia_rdm" in updated.columns:
+        for _, row in edited.iterrows():
+            mask = updated["id_zgloszenia_rdm"].astype(str) == str(row.get("id_zgloszenia_rdm"))
+            for column in editable_columns:
+                updated.loc[mask, column] = row[column]
+    else:
+        for column in editable_columns:
+            updated.loc[edited.index, column] = edited[column]
+
+    st.session_state["rdm_classification"] = sort_rdm_classification(updated)
+    st.session_state["rdm_import_summary"] = None
+    st.session_state["rdm_classification_editor_version"] = st.session_state.get("rdm_classification_editor_version", 0) + 1
 
 
 def sort_rdm_classification(classified_df):
@@ -836,6 +889,26 @@ def build_plan_rows_from_rdm(classified_df):
     return rows_df, rejected, decision
 
 
+def build_unplanned_rows_from_rdm(classified_df):
+    if classified_df is None or classified_df.empty:
+        return pd.DataFrame()
+
+    rows = []
+    for _, row in classified_df.iterrows():
+        if get_rdm_value(row, "wynik_status_raportu", "") != "Niezaplanowane":
+            continue
+        rows.append({
+            "id_zadania": get_rdm_value(row, "id_zgloszenia_rdm"),
+            "typ_pracy": "Awaria RDM",
+            "nazwa_zadania": get_rdm_value(row, "wynik_rekomendowany_typ_zadania", get_rdm_value(row, "wynik_nazwa_typu_awarii", "Awaria RDM")),
+            "pracochlonnosc_h": pd.to_numeric(get_rdm_value(row, "wynik_szacowana_pracochlonnosc_h", 0), errors="coerce"),
+            "wymagane_kompetencje": get_rdm_value(row, "wynik_wymagane_kompetencje", ""),
+            "powod_niezaplanowania": "Nie zaznaczono checkboxa Do harmonogramu w klasyfikacji RDM.",
+            "rekomendowana_akcja": "Zweryfikuj klasyfikację RDM i zaznacz Do harmonogramu, jeśli awaria ma zostać zaplanowana.",
+        })
+    return pd.DataFrame(rows)
+
+
 def import_rdm_classification_to_schedule():
     classified = st.session_state.get("rdm_classification")
     results = st.session_state.get("schedule_results")
@@ -844,12 +917,11 @@ def import_rdm_classification_to_schedule():
 
     plan_df = ensure_execution_status(results.get("plan", pd.DataFrame()))
     new_rows, rejected, decision = build_plan_rows_from_rdm(classified)
-    if new_rows.empty:
-        return {"imported": 0, "skipped_duplicates": 0, "rejected": rejected, "decision": decision}
-
-    existing_ids = set(plan_df.get("id_zadania", pd.Series(dtype=str)).astype(str))
-    new_rows = new_rows[~new_rows["id_zadania"].astype(str).isin(existing_ids)]
-    skipped_duplicates = len(build_plan_rows_from_rdm(classified)[0]) - len(new_rows)
+    skipped_duplicates = 0
+    if not new_rows.empty:
+        existing_ids = set(plan_df.get("id_zadania", pd.Series(dtype=str)).astype(str))
+        new_rows = new_rows[~new_rows["id_zadania"].astype(str).isin(existing_ids)]
+        skipped_duplicates = len(build_plan_rows_from_rdm(classified)[0]) - len(new_rows)
 
     if not new_rows.empty:
         results["plan"] = pd.concat([plan_df, new_rows], ignore_index=True)
@@ -873,6 +945,18 @@ def import_rdm_classification_to_schedule():
         st.session_state["rdm_changes_pending_approval"] = True
         st.session_state["schedule_editor_version"] = st.session_state.get("schedule_editor_version", 0) + 1
         save_current_results_to_excel()
+
+    unplanned_from_rdm = build_unplanned_rows_from_rdm(classified)
+    if not unplanned_from_rdm.empty:
+        current_unplanned = results.get("unplanned", pd.DataFrame()).copy()
+        existing_unplanned_ids = set(current_unplanned.get("id_zadania", pd.Series(dtype=str)).astype(str))
+        unplanned_from_rdm = unplanned_from_rdm[
+            ~unplanned_from_rdm["id_zadania"].astype(str).isin(existing_unplanned_ids)
+        ]
+        if not unplanned_from_rdm.empty:
+            results["unplanned"] = pd.concat([current_unplanned, unplanned_from_rdm], ignore_index=True)
+            st.session_state["schedule_results"] = results
+            save_current_results_to_excel()
 
     summary = {
         "imported": len(new_rows),
@@ -1838,10 +1922,14 @@ if "schedule_editor_version" not in st.session_state:
     st.session_state["schedule_editor_version"] = 0
 if "uploaded_emergency_report_meta" not in st.session_state:
     st.session_state["uploaded_emergency_report_meta"] = None
+if "emergency_report_version" not in st.session_state:
+    st.session_state["emergency_report_version"] = 0
 if "rdm_classification" not in st.session_state:
     st.session_state["rdm_classification"] = None
 if "rdm_classification_output_path" not in st.session_state:
     st.session_state["rdm_classification_output_path"] = None
+if "rdm_classification_editor_version" not in st.session_state:
+    st.session_state["rdm_classification_editor_version"] = 0
 if "rdm_import_summary" not in st.session_state:
     st.session_state["rdm_import_summary"] = None
 if "rdm_changes_pending_approval" not in st.session_state:
@@ -2273,10 +2361,15 @@ elif active_page == "Rejestr Awarii":
             st.warning("Dodawanie awarii jest dostępne dopiero po zatwierdzeniu harmonogramu.")
 
         with st.expander("Raport awarii", expanded=True):
+            if st.session_state.get("rdm_classification") is not None:
+                if st.button("Wgraj raport awarii ponownie", disabled=not schedule_approved, use_container_width=True):
+                    reset_rdm_report_upload()
+                    st.rerun()
+
             uploaded_emergency_report = st.file_uploader(
                 "Wczytaj raport z listą awarii",
                 type=["xlsx", "xls", "csv"],
-                key="emergency_report",
+                key=f"emergency_report_{st.session_state['emergency_report_version']}",
                 disabled=not schedule_approved,
             )
             if not schedule_approved:
@@ -2334,40 +2427,43 @@ elif active_page == "Rejestr Awarii":
                     "wynik_bledy_krytyczne",
                 ]
                 result_columns = [column for column in result_columns if column in classified.columns]
-                st.dataframe(
-                    classified[result_columns].rename(columns={
-                        "id_zgloszenia_rdm": "ID RDM",
-                        "data_wymagana": "Data wymagana",
-                        "data_czas_kwalifikacji": "Data kwalifikacji",
-                        "miasto": "Miasto",
-                        "ulica": "Ulica",
-                        "wynik_kod_typu_awarii": "Kod awarii",
-                        "wynik_nazwa_typu_awarii": "Typ awarii",
-                        "wynik_priorytet_operacyjny": "Priorytet",
-                        "wynik_status_kwalifikacji": "Kwalifikacja",
-                        "wynik_czy_utworzyc_zadanie_planistyczne": "Zadanie",
-                        "wynik_status_raportu": "Status raportu",
-                        "wynik_rekomendowany_typ_zadania": "Typ zadania",
-                        "wynik_wymagane_kompetencje": "Kompetencje",
-                        "wynik_ostrzezenia": "Ostrzeżenia",
-                        "wynik_bledy_krytyczne": "Błędy krytyczne",
-                    }),
+                editor_df = prepare_rdm_classification_editor(classified[result_columns])
+                edited_classification = st.data_editor(
+                    editor_df,
                     hide_index=True,
                     use_container_width=True,
+                    key=f"rdm_classification_editor_{st.session_state['rdm_classification_editor_version']}",
                     height=420,
+                    column_config={
+                        "Do harmonogramu": st.column_config.CheckboxColumn(
+                            "Do harmonogramu",
+                            help="Zaznaczone awarie zostaną zaimportowane do harmonogramu. Odznaczone pozostaną jako niezaplanowane.",
+                        ),
+                        "id_zgloszenia_rdm": st.column_config.TextColumn("ID RDM"),
+                        "data_wymagana": st.column_config.DateColumn("Data wymagana"),
+                        "data_czas_kwalifikacji": st.column_config.DateColumn("Data kwalifikacji"),
+                        "miasto": st.column_config.TextColumn("Miasto"),
+                        "ulica": st.column_config.TextColumn("Ulica"),
+                        "wynik_kod_typu_awarii": st.column_config.TextColumn("Kod awarii"),
+                        "wynik_nazwa_typu_awarii": st.column_config.TextColumn("Typ awarii"),
+                        "wynik_priorytet_operacyjny": st.column_config.SelectboxColumn("Priorytet", options=["P1", "P2", "P3", "P4"]),
+                        "wynik_status_kwalifikacji": st.column_config.TextColumn("Kwalifikacja"),
+                        "wynik_czy_utworzyc_zadanie_planistyczne": None,
+                        "wynik_status_raportu": st.column_config.TextColumn("Status raportu"),
+                        "wynik_rekomendowany_typ_zadania": st.column_config.TextColumn("Typ zadania"),
+                        "wynik_wymagane_kompetencje": st.column_config.TextColumn("Kompetencje"),
+                        "wynik_ostrzezenia": st.column_config.TextColumn("Ostrzeżenia"),
+                        "wynik_bledy_krytyczne": st.column_config.TextColumn("Błędy krytyczne"),
+                    },
                 )
 
-                output_path = st.session_state.get("rdm_classification_output_path")
-                if output_path and os.path.exists(output_path):
-                    with open(output_path, "rb") as output_file:
-                        st.download_button(
-                            "Pobierz wynik klasyfikacji RDM",
-                            data=output_file.read(),
-                            file_name="rdm_klasyfikacja_output.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        )
+                if st.button("Zapisz zmiany klasyfikacji RDM", use_container_width=True):
+                    save_rdm_classification_editor(edited_classification)
+                    st.success("Zmiany klasyfikacji RDM zapisane. Checkboxy decydują, które awarie trafią do harmonogramu.")
+                    st.rerun()
 
                 if st.button("Importuj zakwalifikowane awarie do harmonogramu", disabled=not schedule_approved):
+                    save_rdm_classification_editor(edited_classification)
                     import_summary = import_rdm_classification_to_schedule()
                     st.success(
                         "Import RDM zakończony. "
@@ -2377,9 +2473,6 @@ elif active_page == "Rejestr Awarii":
                         f"odrzucone: {import_summary['rejected']}."
                     )
                     st.rerun()
-
-        with st.expander("Lista zgłoszonych awarii", expanded=False):
-            render_emergency_list(plan_df)
 
 elif active_page == "Status prac":
     if st.session_state["schedule_results"] is None:

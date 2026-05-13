@@ -325,11 +325,11 @@ def render_training_panel():
             st.rerun()
 
 
-def render_monthly_schedule_view(plan_df):
+def render_monthly_schedule_view(plan_df, show_grid=True):
     if plan_df is None or plan_df.empty or "data" not in plan_df.columns:
         st.subheader("Miesięczny widok harmonogramu")
         st.write("Brak dat w harmonogramie.")
-        return
+        return None
 
     monthly_df = plan_df.copy()
     monthly_df["data"] = pd.to_datetime(monthly_df["data"], errors="coerce")
@@ -337,7 +337,7 @@ def render_monthly_schedule_view(plan_df):
     if monthly_df.empty:
         st.subheader("Miesięczny widok harmonogramu")
         st.write("Brak poprawnych dat w harmonogramie.")
-        return
+        return None
 
     monthly_df["zaplanowane_godziny"] = pd.to_numeric(
         monthly_df.get("zaplanowane_godziny", pd.Series(dtype=float)),
@@ -358,7 +358,7 @@ def render_monthly_schedule_view(plan_df):
     month_df = monthly_df[monthly_df["miesiac"] == selected_month].copy()
     if month_df.empty:
         st.write("Brak zadań w wybranym miesiącu.")
-        return
+        return None
     if "id_zadania" not in month_df.columns:
         month_df["id_zadania"] = month_df.index.astype(str)
     if "brygada" not in month_df.columns:
@@ -442,12 +442,15 @@ def render_monthly_schedule_view(plan_df):
     except Exception:
         pass
 
-    st.dataframe(
-        daily[["Data", "Dzień tygodnia", "Zadania", "Godziny", "Godziny awarii", "Brygady"]],
-        hide_index=True,
-        use_container_width=True,
-        height=min(520, max(220, 34 * (len(daily) + 1))),
-    )
+    grid_df = daily[["Data", "Dzień tygodnia", "Zadania", "Godziny", "Godziny awarii", "Brygady"]]
+    if show_grid:
+        st.dataframe(
+            grid_df,
+            hide_index=True,
+            use_container_width=True,
+            height=min(520, max(220, 34 * (len(grid_df) + 1))),
+        )
+    return grid_df
 
 
 def render_operations_dashboard(results):
@@ -514,8 +517,6 @@ def render_operations_dashboard(results):
     if attention_items:
         st.info(" ".join(attention_items))
 
-    render_monthly_schedule_view(plan_df)
-
     status_summary = (
         plan_df.get("status_wykonania", pd.Series(dtype=str))
         .fillna("Do wykonania")
@@ -575,6 +576,8 @@ def render_operations_dashboard(results):
             st.subheader("Obciążenie brygad")
             show_dataframe(load_df, max_rows=20)
 
+    monthly_grid = render_monthly_schedule_view(plan_df, show_grid=False)
+
     st.subheader("Zadania niezaplanowane")
     if unplanned_df.empty:
         st.success("Brak zadań niezaplanowanych.")
@@ -600,6 +603,15 @@ def render_operations_dashboard(results):
             hide_index=True,
             use_container_width=True,
             height=min(420, max(160, 38 * (len(unplanned_df) + 1))),
+        )
+
+    if monthly_grid is not None:
+        st.subheader("Miesięczny grid harmonogramu")
+        st.dataframe(
+            monthly_grid,
+            hide_index=True,
+            use_container_width=True,
+            height=min(520, max(220, 34 * (len(monthly_grid) + 1))),
         )
 
 

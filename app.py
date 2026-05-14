@@ -9,10 +9,16 @@ from scheduler_engine import run_scheduler, replan_day, write_output
 from rdm_hierarchical_classifier import classify_file
 from ui_components import section_title, render_status_badge, render_summary_cards, show_dataframe, show_day_plan, show_plan_grid
 
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
+
 st.set_page_config(page_title="Nowa Energia - Harmonogram pracy", layout="wide")
 
 DATA_DIR = os.path.join(os.getcwd(), "02_Baza danych")
 DEFAULT_STALE_PATH = os.path.join(DATA_DIR, "planowanie_brygad_Stale.xlsx")
+DEFAULT_RUNTIME_STALE_PATH = os.path.join(tempfile.gettempdir(), "nowa_energia_parametry_domyslne.xlsx")
 PLAN_STATUS_OPTIONS = ["Rekomendowany", "Wymaga decyzji", "Zatwierdzony", "Odrzucony"]
 EXECUTION_STATUS_OPTIONS = ["Do wykonania", "W trakcie", "Wykonane", "Nie wykonane", "Przeniesione"]
 
@@ -21,8 +27,7 @@ TRAINING_STEPS = [
         "title": "1. Wgraj dane wejściowe",
         "body": (
             "W panelu bocznym, w sekcji Dane, wgraj dwa przykładowe pliki: "
-            "`planowanie_brygad_Dzial_planowania.xlsx` przy pozycji Dział planowania oraz "
-            "`planowanie_brygad_HR.xlsx` przy pozycji Brygady. "
+            "`Dział Planowania` oraz `Brygady`. "
             "Po wgraniu obu plików aplikacja pokaże, że dane są gotowe do planowania."
         ),
     },
@@ -50,8 +55,7 @@ TRAINING_STEPS = [
     {
         "title": "5. Wgraj rejestr awarii",
         "body": (
-            "Przejdź do zakładki **Rejestr Awarii** i wgraj przykładowy plik "
-            "`rdm_awarie_do_klasyfikacji_harmonogramu.xlsx`. "
+            "Przejdź do zakładki **Rejestr Awarii** i wgraj plik `RDM Awarie`. "
             "Aplikacja sklasyfikuje awarie i pokaże wynik do weryfikacji."
         ),
     },
@@ -85,6 +89,32 @@ def save_workbook_tables(path, tables):
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
         for sheet_name, df in tables.items():
             df.to_excel(writer, sheet_name=sheet_name, index=False)
+
+
+def default_stale_tables():
+    return {
+        "05_parametry": pd.DataFrame([
+            {"parametr": "liczba_godzin_pracy_dziennie", "wartosc": 8},
+            {"parametr": "maksymalne_obciazenie_proc", "wartosc": 90},
+            {"parametr": "rezerwa_operacyjna_proc", "wartosc": 10},
+            {"parametr": "czy_planowac_weekendy", "wartosc": "Nie"},
+        ]),
+        "06_slowniki": pd.DataFrame([
+            {"slownik": "status_wykonania", "wartosc": status}
+            for status in EXECUTION_STATUS_OPTIONS
+        ]),
+    }
+
+
+def ensure_stale_workbook():
+    configured_path = st.session_state.get("stale_path", DEFAULT_STALE_PATH)
+    if configured_path and os.path.exists(configured_path):
+        return configured_path
+
+    save_workbook_tables(DEFAULT_RUNTIME_STALE_PATH, default_stale_tables())
+    st.session_state["stale_path"] = DEFAULT_RUNTIME_STALE_PATH
+    st.session_state["stale_tables"] = default_stale_tables()
+    return DEFAULT_RUNTIME_STALE_PATH
 
 
 def save_uploaded_file(uploaded_file, filename):
@@ -213,7 +243,7 @@ def render_loaded_input_summary():
         f"""
         <div class="loaded-input-panel">
             <span>Dane wejściowe załadowane</span>
-            <strong>Dział planowania:</strong> {escape(str(plan_name))}<br>
+            <strong>Dział Planowania:</strong> {escape(str(plan_name))}<br>
             <strong>Brygady:</strong> {escape(str(hr_name))}
         </div>
         """,
@@ -262,6 +292,8 @@ def render_sidebar_navigation(current_page):
     st.sidebar.markdown("<div class='nav-menu-title'>Menu</div>", unsafe_allow_html=True)
     with st.sidebar.container(key="nav_menu"):
         for page_name in PAGES:
+            if page_name == "Asystent":
+                continue
             is_active = page_name == current_page
             if st.button(
                 page_name,
@@ -1255,6 +1287,31 @@ st.markdown("""
         visibility: hidden;
     }
 
+    .assistant-fab {
+        position: fixed;
+        right: 1.25rem;
+        bottom: 1.25rem;
+        z-index: 9999;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.78rem 1rem;
+        border-radius: 999px;
+        background: #2f2338;
+        color: #ffffff !important;
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        box-shadow: 0 12px 28px rgba(47, 35, 56, 0.28);
+        text-decoration: none !important;
+        font-size: 0.95rem;
+        font-weight: 700;
+    }
+
+    .assistant-fab:hover {
+        background: #5f4770;
+        color: #ffffff !important;
+        text-decoration: none !important;
+    }
+
     h3 {
         font-size: 1.15rem;
         font-weight: 700;
@@ -1954,6 +2011,12 @@ if "show_training_dialog" not in st.session_state:
     st.session_state["show_training_dialog"] = not st.session_state["training_prompt_seen"]
 if "training_step" not in st.session_state:
     st.session_state["training_step"] = 0
+if "llm_api_key" not in st.session_state:
+    st.session_state["llm_api_key"] = ""
+if "llm_model" not in st.session_state:
+    st.session_state["llm_model"] = "gpt-4o-mini"
+if "assistant_messages" not in st.session_state:
+    st.session_state["assistant_messages"] = []
 
 DATA_BASIC_PAGES = [
     "Dane wejściowe",
@@ -1970,6 +2033,7 @@ PAGES = [
     "Przeplanowanie",
     "Rejestr Awarii",
     "Dashboard",
+    "Asystent",
     "Dane podstawowe",
 ]
 DEFAULT_PAGE = "Zarządzanie Harmonogramem"
@@ -1987,6 +2051,7 @@ elif "nav_page" not in st.session_state or st.session_state["nav_page"] not in P
     st.session_state["nav_page"] = DEFAULT_PAGE
 page = st.session_state["nav_page"]
 render_sidebar_navigation(page)
+st.markdown('<a class="assistant-fab" href="?nav=Asystent">Asystent</a>', unsafe_allow_html=True)
 PLAN_BUTTON_HELP = "Aplikacja generuje rekomendację. Decyzję podejmuje kierownik wykonawstwa."
 
 if st.sidebar.button("Jak zacząć?", use_container_width=True):
@@ -1998,11 +2063,11 @@ if st.session_state.get("show_training_dialog", False):
     render_training_panel()
 
 with st.sidebar.expander("Dane", expanded=True):
-    stale_path = st.session_state["stale_path"]
+    stale_path = ensure_stale_workbook()
 
     render_data_upload(
         "planowanie",
-        "Dział planowania",
+        "Dział Planowania",
         "planowanie_brygad_Dzial_planowania.xlsx",
         ["xlsx"],
     )
@@ -2019,7 +2084,7 @@ with st.sidebar.expander("Dane", expanded=True):
             st.session_state["input_paths"] = {
                 "planowanie": session_files["planowanie"],
                 "hr": session_files["hr"],
-                "stale": stale_path
+                "stale": ensure_stale_workbook()
             }
             st.markdown("<div class='data-upload-session'>Gotowe do planowania</div>", unsafe_allow_html=True)
         else:
@@ -2029,7 +2094,7 @@ with st.sidebar.expander("Dane", expanded=True):
         st.session_state["input_paths"] = None
         missing = []
         if "planowanie" not in session_files:
-            missing.append("Dział planowania")
+            missing.append("Dział Planowania")
         if "hr" not in session_files:
             missing.append("Brygady")
         st.markdown(
@@ -2070,7 +2135,7 @@ elif active_page == "Dane wejściowe":
 
 elif active_page == "Dane stałe":
     section_title("Dane stałe")
-    stale_path = st.session_state["stale_path"]
+    stale_path = ensure_stale_workbook()
     st.write("Tutaj zmieniasz stałe używane do planowania. Nie trzeba dodawać osobnego pliku.")
 
     if not os.path.exists(stale_path):
@@ -2288,10 +2353,12 @@ elif active_page == "Zarządzanie Harmonogramem":
                         key=f"select_all_rdm_emergencies_{st.session_state['schedule_editor_version']}",
                     )
                 editable_plan["_row_key"] = make_schedule_row_keys(editable_plan)
-                editable_plan.insert(0, "Dodaj", emergency_mask & (editable_plan["status"].astype(str) == "Zatwierdzony"))
-                editable_plan.insert(1, "RDM", emergency_mask.map({True: "AWARIA RDM", False: ""}))
+                emergency_selection_plan = editable_plan.loc[emergency_mask].copy()
+                if not emergency_selection_plan.empty:
+                    emergency_selection_plan.insert(0, "Dodaj", emergency_selection_plan["status"].astype(str) == "Zatwierdzony")
+                    emergency_selection_plan.insert(1, "RDM", "AWARIA RDM")
                 if select_all_emergencies:
-                    editable_plan.loc[pending_emergency_mask, "Dodaj"] = True
+                    emergency_selection_plan.loc[emergency_selection_plan["status"].astype(str) != "Zatwierdzony", "Dodaj"] = True
                 styled_editable_plan = editable_plan.style.apply(highlight_emergency_editor_rows, axis=1)
 
                 with st.form("schedule_edit_form"):
@@ -2301,10 +2368,8 @@ elif active_page == "Zarządzanie Harmonogramem":
                         use_container_width=True,
                         num_rows="dynamic",
                         key=f"schedule_editor_{st.session_state['schedule_editor_version']}",
-                        disabled=["RDM", "Źródło"],
+                        disabled=["Źródło"],
                         column_config={
-                            "Dodaj": st.column_config.CheckboxColumn("Dodaj", help="Zaznacz awarię RDM do dodania do harmonogramu"),
-                            "RDM": st.column_config.TextColumn("RDM"),
                             "Źródło": st.column_config.TextColumn("Źródło"),
                             "_row_key": None,
                             "data": st.column_config.DateColumn("data"),
@@ -2317,6 +2382,22 @@ elif active_page == "Zarządzanie Harmonogramem":
                             "zrodlo_zadania": None,
                         },
                     )
+                    edited_emergency_selection = pd.DataFrame()
+                    if not emergency_selection_plan.empty:
+                        st.write("Awarie do dodania do harmonogramu")
+                        edited_emergency_selection = st.data_editor(
+                            emergency_selection_plan,
+                            hide_index=True,
+                            use_container_width=True,
+                            key=f"schedule_emergency_selector_{st.session_state['schedule_editor_version']}",
+                            disabled=[column for column in emergency_selection_plan.columns if column != "Dodaj"],
+                            column_config={
+                                "Dodaj": st.column_config.CheckboxColumn("Dodaj", help="Zaznacz awarię RDM do dodania do harmonogramu"),
+                                "RDM": st.column_config.TextColumn("RDM"),
+                                "Źródło": st.column_config.TextColumn("Źródło"),
+                                "_row_key": None,
+                            },
+                        )
                     form_cols = st.columns(2)
                     save_schedule = form_cols[0].form_submit_button("Zapisz zmiany w harmonogramie")
                     add_selected_emergencies = form_cols[1].form_submit_button("Dodaj do harmonogramu")
@@ -2329,19 +2410,14 @@ elif active_page == "Zarządzanie Harmonogramem":
 
                     selected_emergency_keys = set()
                     visible_emergency_keys = set()
-                    if "Dodaj" in edited_plan.columns and "_row_key" in edited_plan.columns:
-                        edited_emergency_mask = edited_plan["Źródło"].astype(str).str.lower() == "awaria"
-                        visible_emergency_keys = set(edited_plan.loc[edited_emergency_mask, "_row_key"].dropna().astype(str))
+                    if not edited_emergency_selection.empty and "_row_key" in edited_emergency_selection.columns:
+                        visible_emergency_keys = set(edited_emergency_selection["_row_key"].dropna().astype(str))
                         selected_emergency_keys = set(
-                            edited_plan.loc[
-                                edited_plan["Dodaj"].fillna(False) & edited_emergency_mask,
+                            edited_emergency_selection.loc[
+                                edited_emergency_selection["Dodaj"].fillna(False),
                                 "_row_key",
                             ].dropna().astype(str)
                         )
-                    if "Dodaj" in edited_plan.columns:
-                        edited_plan = edited_plan.drop(columns=["Dodaj"])
-                    if "RDM" in edited_plan.columns:
-                        edited_plan = edited_plan.drop(columns=["RDM"])
                     if "Źródło" in edited_plan.columns:
                         edited_plan = edited_plan.drop(columns=["Źródło"])
                     if "data" in edited_plan.columns:
@@ -2430,14 +2506,14 @@ elif active_page == "Rejestr Awarii":
         if not schedule_approved:
             st.warning("Dodawanie awarii jest dostępne dopiero po zatwierdzeniu harmonogramu.")
 
-        with st.expander("Raport awarii", expanded=True):
+        with st.expander("RDM Awarie", expanded=True):
             if st.session_state.get("rdm_classification") is not None:
                 if st.button("Wgraj raport awarii ponownie", disabled=not schedule_approved, use_container_width=True):
                     reset_rdm_report_upload()
                     st.rerun()
 
             uploaded_emergency_report = st.file_uploader(
-                "Wczytaj raport z listą awarii",
+                "Wczytaj plik: RDM Awarie",
                 type=["xlsx", "xls", "csv"],
                 key=f"emergency_report_{st.session_state['emergency_report_version']}",
                 disabled=not schedule_approved,
@@ -2445,14 +2521,14 @@ elif active_page == "Rejestr Awarii":
             if not schedule_approved:
                 st.info("Zatwierdź harmonogram, aby wczytać i dodać nowe awarie.")
             elif uploaded_emergency_report is None:
-                st.info("Wczytaj raport awarii RDM do klasyfikacji.")
+                st.info("Wczytaj plik RDM Awarie do klasyfikacji.")
             else:
                 report_meta = (uploaded_emergency_report.name, uploaded_emergency_report.size)
                 if st.session_state["uploaded_emergency_report_meta"] != report_meta:
                     try:
                         st.session_state["uploaded_emergency_report_meta"] = report_meta
                         classify_rdm_report(uploaded_emergency_report)
-                        st.success(f"Raport awarii sklasyfikowany: {uploaded_emergency_report.name}")
+                        st.success(f"RDM Awarie sklasyfikowane: {uploaded_emergency_report.name}")
                     except Exception as exc:
                         st.error(f"Nie udało się sklasyfikować raportu RDM: {exc}")
 
@@ -2543,6 +2619,81 @@ elif active_page == "Rejestr Awarii":
                         f"odrzucone: {import_summary['rejected']}."
                     )
                     st.rerun()
+
+elif active_page == "Asystent":
+    section_title("Asystent")
+    st.write("Opcjonalny czat z LLM do pomocy przy obsłudze harmonogramu, awarii i dokumentacji.")
+
+    with st.expander("Konfiguracja LLM", expanded=not bool(st.session_state.get("llm_api_key"))):
+        st.session_state["llm_api_key"] = st.text_input(
+            "Klucz API",
+            value=st.session_state.get("llm_api_key", ""),
+            type="password",
+            help="Klucz jest przechowywany tylko w bieżącej sesji aplikacji.",
+        )
+        st.session_state["llm_model"] = st.text_input(
+            "Model",
+            value=st.session_state.get("llm_model", "gpt-4o-mini"),
+            help="Wpisz nazwę modelu dostępnego dla używanego klucza API.",
+        )
+        if st.button("Wyczyść rozmowę", use_container_width=True):
+            st.session_state["assistant_messages"] = []
+            st.rerun()
+
+    if not st.session_state.get("assistant_messages"):
+        st.session_state["assistant_messages"] = [
+            {
+                "role": "assistant",
+                "content": "Cześć. Mogę pomóc wyjaśnić harmonogram, statusy prac, awarie RDM albo przygotować dokumentację.",
+            }
+        ]
+
+    for message in st.session_state["assistant_messages"]:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+
+    user_message = st.chat_input("Napisz pytanie do asystenta")
+    if user_message:
+        st.session_state["assistant_messages"].append({"role": "user", "content": user_message})
+        with st.chat_message("user"):
+            st.write(user_message)
+
+        if not st.session_state.get("llm_api_key"):
+            answer = "Podaj klucz API w sekcji Konfiguracja LLM, żeby uruchomić odpowiedź asystenta."
+        elif OpenAI is None:
+            answer = "Brakuje biblioteki `openai`. Zainstaluj zależności poleceniem: `pip install -r requirements.txt`."
+        else:
+            try:
+                plan_df = pd.DataFrame()
+                if st.session_state.get("schedule_results") is not None:
+                    plan_df = st.session_state["schedule_results"].get("plan", pd.DataFrame())
+                context = {
+                    "liczba_zadan": int(len(plan_df)) if plan_df is not None else 0,
+                    "zatwierdzony": bool(st.session_state.get("approved", False)),
+                }
+                client = OpenAI(api_key=st.session_state["llm_api_key"])
+                response = client.chat.completions.create(
+                    model=st.session_state.get("llm_model", "gpt-4o-mini"),
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": (
+                                "Jesteś asystentem aplikacji Nowa Energia — Harmonogram pracy. "
+                                "Pomagasz kierownikowi wykonawstwa zrozumieć harmonogram, awarie RDM, statusy prac i dokumentację. "
+                                "Nie podejmujesz decyzji operacyjnych. Decyzję zawsze podejmuje użytkownik."
+                            ),
+                        },
+                        {"role": "system", "content": f"Kontekst aplikacji: {context}"},
+                        *st.session_state["assistant_messages"][-12:],
+                    ],
+                )
+                answer = response.choices[0].message.content or "Brak odpowiedzi z modelu."
+            except Exception as exc:
+                answer = f"Nie udało się uzyskać odpowiedzi LLM: {exc}"
+
+        st.session_state["assistant_messages"].append({"role": "assistant", "content": answer})
+        with st.chat_message("assistant"):
+            st.write(answer)
 
 elif active_page == "Status prac":
     if st.session_state["schedule_results"] is None:

@@ -21,6 +21,8 @@ DEFAULT_STALE_PATH = os.path.join(DATA_DIR, "planowanie_brygad_Stale.xlsx")
 DEFAULT_RUNTIME_STALE_PATH = os.path.join(tempfile.gettempdir(), "nowa_energia_parametry_domyslne.xlsx")
 PLAN_STATUS_OPTIONS = ["Rekomendowany", "Wymaga decyzji", "Zatwierdzony", "Odrzucony"]
 EXECUTION_STATUS_OPTIONS = ["Do wykonania", "W trakcie", "Wykonane", "Nie wykonane", "Przeniesione"]
+RDM_SELECTION_COLUMN = "wynik_czy_utworzyc_zadanie_planistyczne"
+RDM_RECOMMENDATION_COLUMN = "rekomendacja_ai_do_harmonogramu"
 
 TRAINING_STEPS = [
     {
@@ -194,9 +196,10 @@ def save_current_results_to_excel():
     if results is None:
         return
     output_path = os.path.join(os.getcwd(), "harmonogram_brygad_output.xlsx")
+    plan_for_output = get_schedule_rows_for_display(results.get("plan", pd.DataFrame()))
     write_output(
         output_path,
-        results.get("plan", pd.DataFrame()),
+        plan_for_output,
         results.get("unplanned", pd.DataFrame()),
         results.get("conflicts", pd.DataFrame()),
         results.get("obciazenie", pd.DataFrame()),
@@ -304,6 +307,27 @@ def render_sidebar_navigation(current_page):
                 st.session_state["nav_page"] = page_name
                 st.query_params["nav"] = page_name
                 st.rerun()
+
+
+def render_global_llm_settings():
+    has_key = bool(st.session_state.get("llm_api_key"))
+    with st.sidebar.expander("Ustawienia aplikacji", expanded=not has_key):
+        st.caption("Klucz API LLM jest wspólny dla całej aplikacji. Asystent korzysta z tej samej konfiguracji.")
+        st.session_state["llm_api_key"] = st.text_input(
+            "Klucz API LLM aplikacji",
+            value=st.session_state.get("llm_api_key", ""),
+            type="password",
+            help="Klucz jest przechowywany tylko w bieżącej sesji aplikacji.",
+        )
+        st.session_state["llm_model"] = st.text_input(
+            "Model LLM aplikacji",
+            value=st.session_state.get("llm_model", "gpt-4o-mini"),
+            help="Wpisz nazwę modelu dostępnego dla używanego klucza API.",
+        )
+        if st.session_state.get("llm_api_key"):
+            st.success("Klucz API ustawiony dla aplikacji.")
+        else:
+            st.info("Podaj klucz, jeśli chcesz używać funkcji LLM w aplikacji.")
 
 
 def render_training_panel():
@@ -656,14 +680,19 @@ def approve_current_schedule():
     if plan_df.empty:
         return
 
-    plan_df["status"] = "Zatwierdzony"
+    pending_emergency_mask = get_pending_emergency_mask(plan_df)
+    approval_mask = ~pending_emergency_mask
+    plan_df.loc[approval_mask, "status"] = "Zatwierdzony"
     results["plan"] = plan_df
 
     log_entry = pd.DataFrame([{
         "id_zadania": None,
         "etap": "Zatwierdzenie harmonogramu",
         "decyzja": "Zatwierdzono harmonogram",
-        "uzasadnienie": "Status wszystkich pozycji harmonogramu ustawiono na Zatwierdzony.",
+        "uzasadnienie": (
+            f"Status zatwierdzonych pozycji harmonogramu ustawiono na Zatwierdzony. "
+            f"Awarie oczekujące na decyzję pozostawiono na liście roboczej: {int(pending_emergency_mask.sum())}."
+        ),
         "data_czas_logu": datetime.now(),
     }])
     results["log"] = pd.concat(
@@ -672,8 +701,8 @@ def approve_current_schedule():
     )
 
     st.session_state["schedule_results"] = results
-    st.session_state["approved"] = True
-    st.session_state["rdm_changes_pending_approval"] = False
+    st.session_state["rdm_changes_pending_approval"] = bool(pending_emergency_mask.any())
+    sync_approval_from_plan_status(plan_df)
     save_current_results_to_excel()
 
 
@@ -681,7 +710,12 @@ def sync_approval_from_plan_status(plan_df):
     if plan_df is None or plan_df.empty or "status" not in plan_df.columns:
         st.session_state["approved"] = False
         return
-    st.session_state["approved"] = bool((plan_df["status"] == "Zatwierdzony").all())
+    plan_df = ensure_execution_status(plan_df)
+    approval_scope = plan_df.loc[~get_pending_emergency_mask(plan_df)].copy()
+    if approval_scope.empty:
+        st.session_state["approved"] = False
+        return
+    st.session_state["approved"] = bool((approval_scope["status"] == "Zatwierdzony").all())
 
 
 def update_single_plan_status(row_index, new_status):
@@ -746,6 +780,9 @@ def classify_rdm_report(uploaded_report):
     output_path = os.path.join(os.getcwd(), "rdm_klasyfikacja_output.xlsx")
     classified = classify_file(input_path, output_path)
     classified = sort_rdm_classification(classified)
+    if RDM_SELECTION_COLUMN in classified.columns:
+        classified[RDM_RECOMMENDATION_COLUMN] = classified[RDM_SELECTION_COLUMN]
+        classified[RDM_SELECTION_COLUMN] = "Nie"
     st.session_state["rdm_classification"] = classified
     st.session_state["rdm_classification_output_path"] = output_path
     st.session_state["rdm_import_summary"] = None
@@ -762,12 +799,22 @@ def reset_rdm_report_upload():
     st.session_state["rdm_classification_editor_version"] = st.session_state.get("rdm_classification_editor_version", 0) + 1
 
 
+def ensure_rdm_manual_selection(classified_df):
+    if classified_df is None or classified_df.empty or RDM_SELECTION_COLUMN not in classified_df.columns:
+        return classified_df
+    normalized = classified_df.copy()
+    if RDM_RECOMMENDATION_COLUMN not in normalized.columns:
+        normalized[RDM_RECOMMENDATION_COLUMN] = normalized[RDM_SELECTION_COLUMN]
+        normalized[RDM_SELECTION_COLUMN] = "Nie"
+    return normalized
+
+
 def prepare_rdm_classification_editor(classified_df):
-    editor_df = classified_df.copy()
+    editor_df = ensure_rdm_manual_selection(classified_df).copy()
     editor_df.insert(
         0,
         "Do harmonogramu",
-        editor_df.get("wynik_czy_utworzyc_zadanie_planistyczne", pd.Series(dtype=str)).astype(str) == "Tak",
+        editor_df.get(RDM_SELECTION_COLUMN, pd.Series(dtype=str)).astype(str) == "Tak",
     )
     for column in ["data_wymagana", "data_czas_kwalifikacji"]:
         if column in editor_df.columns:
@@ -783,12 +830,14 @@ def save_rdm_classification_editor(edited_df):
     updated = current.copy()
     edited = edited_df.copy()
     if "Do harmonogramu" in edited.columns:
-        selected = edited["Do harmonogramu"].fillna(False).astype(bool)
-        edited["wynik_czy_utworzyc_zadanie_planistyczne"] = selected.map({True: "Tak", False: "Nie"})
+        selected = edited["Do harmonogramu"].map(is_checkbox_selected)
+        edited[RDM_SELECTION_COLUMN] = selected.map({True: "Tak", False: "Nie"})
         if "wynik_status_raportu" in edited.columns:
             edited.loc[~selected, "wynik_status_raportu"] = "Niezaplanowane"
             edited.loc[selected & (edited["wynik_status_raportu"].astype(str) == "Niezaplanowane"), "wynik_status_raportu"] = "Gotowe do importu"
         edited = edited.drop(columns=["Do harmonogramu"])
+    if RDM_RECOMMENDATION_COLUMN in edited.columns:
+        edited = edited.drop(columns=[RDM_RECOMMENDATION_COLUMN])
 
     editable_columns = [column for column in edited.columns if column in updated.columns]
     if "id_zgloszenia_rdm" in edited.columns and "id_zgloszenia_rdm" in updated.columns:
@@ -946,6 +995,8 @@ def import_rdm_classification_to_schedule():
     results = st.session_state.get("schedule_results")
     if classified is None or classified.empty or results is None:
         return {"imported": 0, "skipped_duplicates": 0, "rejected": 0, "decision": 0}
+    classified = ensure_rdm_manual_selection(classified)
+    st.session_state["rdm_classification"] = classified
 
     plan_df = ensure_execution_status(results.get("plan", pd.DataFrame()))
     new_rows, rejected, decision = build_plan_rows_from_rdm(classified)
@@ -973,8 +1024,8 @@ def import_rdm_classification_to_schedule():
             }]),
         ], ignore_index=True)
         st.session_state["schedule_results"] = results
-        st.session_state["approved"] = False
         st.session_state["rdm_changes_pending_approval"] = True
+        sync_approval_from_plan_status(results["plan"])
         st.session_state["schedule_editor_version"] = st.session_state.get("schedule_editor_version", 0) + 1
         save_current_results_to_excel()
 
@@ -1112,6 +1163,28 @@ def get_emergency_mask(plan_df):
         return pd.Series(False, index=plan_df.index if plan_df is not None else None)
     marked_df = mark_emergency_source(plan_df)
     return marked_df["Źródło"].astype(str).str.lower() == "awaria"
+
+
+def get_pending_emergency_mask(plan_df):
+    if plan_df is None or plan_df.empty:
+        return pd.Series(False, index=plan_df.index if plan_df is not None else None)
+    plan_df = ensure_execution_status(plan_df)
+    return get_emergency_mask(plan_df) & (plan_df["status"].astype(str) != "Zatwierdzony")
+
+
+def get_schedule_rows_for_display(plan_df):
+    if plan_df is None or plan_df.empty:
+        return pd.DataFrame()
+    pending_emergency_mask = get_pending_emergency_mask(plan_df)
+    return plan_df.loc[~pending_emergency_mask].copy()
+
+
+def is_checkbox_selected(value):
+    if pd.isna(value):
+        return False
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "tak", "yes", "1"}
+    return bool(value)
 
 
 def make_schedule_row_keys(plan_df):
@@ -1353,6 +1426,31 @@ st.markdown("""
         background: rgba(59, 45, 70, 0.82);
         border-color: #b49fc0;
         color: #ffffff;
+    }
+
+    [data-testid="stSidebar"] [data-baseweb="input"] > div {
+        background: #ffffff !important;
+        border-color: #e3d4ea !important;
+    }
+
+    [data-testid="stSidebar"] [data-baseweb="input"] input,
+    [data-testid="stSidebar"] [data-baseweb="input"] input[type="password"],
+    [data-testid="stSidebar"] [data-baseweb="input"] input[type="text"] {
+        color: #2a2230 !important;
+        -webkit-text-fill-color: #2a2230 !important;
+        caret-color: #2a2230 !important;
+    }
+
+    [data-testid="stSidebar"] [data-baseweb="input"] input::placeholder {
+        color: #6f6178 !important;
+        -webkit-text-fill-color: #6f6178 !important;
+        opacity: 1 !important;
+    }
+
+    [data-testid="stSidebar"] [data-baseweb="input"] svg,
+    [data-testid="stSidebar"] [data-baseweb="input"] button svg {
+        color: #6f6178 !important;
+        fill: #6f6178 !important;
     }
 
     [data-testid="stSidebar"] [data-testid="stExpander"] {
@@ -2102,6 +2200,8 @@ with st.sidebar.expander("Dane", expanded=True):
             unsafe_allow_html=True,
         )
 
+render_global_llm_settings()
+
 st.markdown("<div class='top-safe-spacer'></div>", unsafe_allow_html=True)
 st.title("Nowa Energia — Harmonogram pracy")
 active_page = page
@@ -2245,20 +2345,27 @@ elif active_page == "Harmonogram":
         st.session_state["schedule_results"]["plan"] = ensure_execution_status(st.session_state["schedule_results"]["plan"])
         plan_df = enrich_plan_addresses_from_input(st.session_state["schedule_results"]["plan"])
         st.session_state["schedule_results"]["plan"] = plan_df
-        if plan_df.empty:
+        pending_emergency_count = int(get_pending_emergency_mask(plan_df).sum())
+        display_plan_df = get_schedule_rows_for_display(plan_df)
+        if pending_emergency_count:
+            st.warning(
+                f"Awarie oczekujące na decyzję: {pending_emergency_count}. "
+                "Nie są pokazane w zatwierdzonym harmonogramie, dopóki nie zaznaczysz ich w sekcji „Awarie do dodania do harmonogramu”."
+            )
+        if display_plan_df.empty:
             st.warning("Brak zaplanowanych zadań.")
         else:
             validation = st.session_state["schedule_results"].get("validation", {})
             stats = {
                 "tasks_total": validation.get("counts", {}).get("tasks_total", 0),
-                "planned_count": len(plan_df),
+                "planned_count": len(display_plan_df),
                 "unplanned_count": len(st.session_state["schedule_results"].get("unplanned", pd.DataFrame())),
                 "conflict_count": len(st.session_state["schedule_results"].get("conflicts", pd.DataFrame())),
             }
             render_management_summary_cards(stats)
             metric_cols = st.columns(4)
-            metric_cols[0].metric("Wykonane", len(plan_df[plan_df["status_wykonania"] == "Wykonane"]))
-            metric_cols[1].metric("Pozostało", len(plan_df[plan_df["status_wykonania"] != "Wykonane"]))
+            metric_cols[0].metric("Wykonane", len(display_plan_df[display_plan_df["status_wykonania"] == "Wykonane"]))
+            metric_cols[1].metric("Pozostało", len(display_plan_df[display_plan_df["status_wykonania"] != "Wykonane"]))
             metric_cols[2].write("**Status danych:**")
             with metric_cols[2]:
                 render_status_badge(validation.get("status", "Brak danych"))
@@ -2271,7 +2378,7 @@ elif active_page == "Harmonogram":
                 st.subheader("Pełny harmonogram")
             with header_cols[1]:
                 render_schedule_excel_download()
-            filtered_plan = filter_plan_table(plan_df, "schedule_full")
+            filtered_plan = filter_plan_table(display_plan_df, "schedule_full")
             show_plan_grid(filtered_plan)
 
 elif active_page == "Zarządzanie Harmonogramem":
@@ -2345,7 +2452,11 @@ elif active_page == "Zarządzanie Harmonogramem":
                 emergency_mask = editable_plan["Źródło"].astype(str).str.lower() == "awaria"
                 pending_emergency_mask = emergency_mask & (editable_plan["status"].astype(str) != "Zatwierdzony")
                 if emergency_mask.any():
-                    st.write("Awarie dodane z rejestru RDM są oznaczone na czerwono. Zaznacz awarie checkboxem w tym gridzie i kliknij Dodaj do harmonogramu.")
+                    st.write(
+                        "Awarie dodane z rejestru RDM są oznaczone na czerwono. "
+                        "Zaznacz wybrane pozycje i kliknij Dodaj do harmonogramu. "
+                        "Pozostałe awarie zostaną na liście, żeby można było dodać je później."
+                    )
                 select_all_emergencies = False
                 if pending_emergency_mask.any():
                     select_all_emergencies = st.checkbox(
@@ -2353,13 +2464,14 @@ elif active_page == "Zarządzanie Harmonogramem":
                         key=f"select_all_rdm_emergencies_{st.session_state['schedule_editor_version']}",
                     )
                 editable_plan["_row_key"] = make_schedule_row_keys(editable_plan)
-                emergency_selection_plan = editable_plan.loc[emergency_mask].copy()
+                schedule_editor_plan = editable_plan.loc[~pending_emergency_mask].copy()
+                emergency_selection_plan = editable_plan.loc[pending_emergency_mask].copy()
                 if not emergency_selection_plan.empty:
-                    emergency_selection_plan.insert(0, "Dodaj", emergency_selection_plan["status"].astype(str) == "Zatwierdzony")
+                    emergency_selection_plan.insert(0, "Dodaj", False)
                     emergency_selection_plan.insert(1, "RDM", "AWARIA RDM")
                 if select_all_emergencies:
-                    emergency_selection_plan.loc[emergency_selection_plan["status"].astype(str) != "Zatwierdzony", "Dodaj"] = True
-                styled_editable_plan = editable_plan.style.apply(highlight_emergency_editor_rows, axis=1)
+                    emergency_selection_plan["Dodaj"] = True
+                styled_editable_plan = schedule_editor_plan.style.apply(highlight_emergency_editor_rows, axis=1)
 
                 with st.form("schedule_edit_form"):
                     edited_plan = st.data_editor(
@@ -2409,14 +2521,10 @@ elif active_page == "Zarządzanie Harmonogramem":
                         edited_plan["Źródło"] = editable_plan["Źródło"].reindex(edited_plan.index)
 
                     selected_emergency_keys = set()
-                    visible_emergency_keys = set()
                     if not edited_emergency_selection.empty and "_row_key" in edited_emergency_selection.columns:
-                        visible_emergency_keys = set(edited_emergency_selection["_row_key"].dropna().astype(str))
+                        checked_mask = edited_emergency_selection["Dodaj"].map(is_checkbox_selected)
                         selected_emergency_keys = set(
-                            edited_emergency_selection.loc[
-                                edited_emergency_selection["Dodaj"].fillna(False),
-                                "_row_key",
-                            ].dropna().astype(str)
+                            edited_emergency_selection.loc[checked_mask, "_row_key"].dropna().astype(str)
                         )
                     if "Źródło" in edited_plan.columns:
                         edited_plan = edited_plan.drop(columns=["Źródło"])
@@ -2437,6 +2545,8 @@ elif active_page == "Zarządzanie Harmonogramem":
                         column for column in edited_plan.columns
                         if column in current_plan.columns and column != "_row_key"
                     ]
+                    if add_selected_emergencies and "status" in update_columns:
+                        update_columns.remove("status")
                     for _, edited_row in edited_plan.dropna(subset=["_row_key"]).iterrows():
                         row_key = str(edited_row["_row_key"])
                         row_mask = current_plan["_row_key"].astype(str) == row_key
@@ -2444,31 +2554,16 @@ elif active_page == "Zarządzanie Harmonogramem":
                             current_plan.loc[row_mask, column] = edited_row[column]
 
                     added_count = 0
-                    removed_count = 0
                     if add_selected_emergencies:
                         selected_mask = current_plan["_row_key"].astype(str).isin(selected_emergency_keys)
-                        current_plan.loc[selected_mask, "status"] = "Zatwierdzony"
-                        added_count = int(selected_mask.sum())
-
-                        unselected_emergency_keys = visible_emergency_keys - selected_emergency_keys
-                        remove_mask = current_plan["_row_key"].astype(str).isin(unselected_emergency_keys)
-                        removed_rows = current_plan.loc[remove_mask].drop(columns=["_row_key"], errors="ignore").copy()
-                        removed_count = len(removed_rows)
-                        if removed_count:
-                            removed_rows["powod_niezaplanowania"] = "Odznaczono checkbox Dodaj w edycji harmonogramu."
-                            removed_rows["rekomendowana_akcja"] = "Zaznacz Dodaj, jeśli awaria ma wrócić do harmonogramu."
-                            current_unplanned = st.session_state["schedule_results"].get("unplanned", pd.DataFrame()).copy()
-                            if "id_zadania" in current_unplanned.columns and "id_zadania" in removed_rows.columns:
-                                existing_unplanned_ids = set(current_unplanned["id_zadania"].fillna("").astype(str))
-                                removed_rows = removed_rows[
-                                    ~removed_rows["id_zadania"].fillna("").astype(str).isin(existing_unplanned_ids)
-                                ]
-                            if not removed_rows.empty:
-                                st.session_state["schedule_results"]["unplanned"] = pd.concat(
-                                    [current_unplanned, removed_rows],
-                                    ignore_index=True,
-                                )
-                            current_plan = current_plan.loc[~remove_mask].copy()
+                        current_emergency_mask = get_emergency_mask(current_plan)
+                        pending_selected_mask = (
+                            selected_mask
+                            & current_emergency_mask
+                            & (current_plan["status"].astype(str) != "Zatwierdzony")
+                        )
+                        current_plan.loc[pending_selected_mask, "status"] = "Zatwierdzony"
+                        added_count = int(pending_selected_mask.sum())
 
                     current_plan = current_plan.drop(columns=["_row_key"], errors="ignore")
                     st.session_state["schedule_results"]["plan"] = current_plan
@@ -2489,7 +2584,8 @@ elif active_page == "Zarządzanie Harmonogramem":
                         )
                     save_current_results_to_excel()
                     if add_selected_emergencies:
-                        st.success(f"Dodano do harmonogramu awarie RDM: {added_count}. Odznaczono jako niezaplanowane: {removed_count}.")
+                        st.success(f"Dodano do harmonogramu awarie RDM: {added_count}. Pozostałe awarie zostają na liście do późniejszej decyzji.")
+                        st.session_state["schedule_editor_version"] = st.session_state.get("schedule_editor_version", 0) + 1
                     else:
                         st.success("Harmonogram zapisany. Możesz go teraz sprawdzić i zatwierdzić.")
                     st.rerun()
@@ -2534,23 +2630,29 @@ elif active_page == "Rejestr Awarii":
 
             classified = st.session_state.get("rdm_classification")
             if classified is not None and not classified.empty:
+                classified = ensure_rdm_manual_selection(classified)
+                st.session_state["rdm_classification"] = classified
                 if should_show_rdm_ai_notice():
                     st.warning(
                         "Klasyfikacja awarii została wykonana przez AI. "
                         "Przed importem do harmonogramu kierownik wykonawstwa powinien zweryfikować wynik klasyfikacji, "
                         "priorytet, wymagane kompetencje oraz decyzję, czy awaria ma zostać dodana do planu."
                     )
-                summary_cols = st.columns(4)
+                summary_cols = st.columns(5)
                 summary_cols[0].metric("RDM rekordy", len(classified))
                 summary_cols[1].metric(
-                    "Do harmonogramu",
-                    int((classified["wynik_czy_utworzyc_zadanie_planistyczne"] == "Tak").sum()),
+                    "Rekomendowane AI",
+                    int((classified.get(RDM_RECOMMENDATION_COLUMN, pd.Series(dtype=str)).astype(str) == "Tak").sum()),
                 )
                 summary_cols[2].metric(
+                    "Wybrane",
+                    int((classified.get(RDM_SELECTION_COLUMN, pd.Series(dtype=str)).astype(str) == "Tak").sum()),
+                )
+                summary_cols[3].metric(
                     "Do decyzji",
                     int((classified["wynik_status_raportu"] == "Do decyzji").sum()),
                 )
-                summary_cols[3].metric(
+                summary_cols[4].metric(
                     "Odrzucone",
                     int((classified["wynik_status_raportu"] == "Odrzucone z importu").sum()),
                 )
@@ -2565,7 +2667,8 @@ elif active_page == "Rejestr Awarii":
                     "wynik_nazwa_typu_awarii",
                     "wynik_priorytet_operacyjny",
                     "wynik_status_kwalifikacji",
-                    "wynik_czy_utworzyc_zadanie_planistyczne",
+                    RDM_RECOMMENDATION_COLUMN,
+                    RDM_SELECTION_COLUMN,
                     "wynik_status_raportu",
                     "wynik_rekomendowany_typ_zadania",
                     "wynik_wymagane_kompetencje",
@@ -2583,7 +2686,7 @@ elif active_page == "Rejestr Awarii":
                     column_config={
                         "Do harmonogramu": st.column_config.CheckboxColumn(
                             "Do harmonogramu",
-                            help="Zaznaczone awarie zostaną zaimportowane do harmonogramu. Odznaczone pozostaną jako niezaplanowane.",
+                            help="Zaznacz tylko te awarie, które mają zostać przekazane dalej do harmonogramu.",
                         ),
                         "id_zgloszenia_rdm": st.column_config.TextColumn("ID RDM"),
                         "data_wymagana": st.column_config.DateColumn("Data wymagana"),
@@ -2594,7 +2697,8 @@ elif active_page == "Rejestr Awarii":
                         "wynik_nazwa_typu_awarii": st.column_config.TextColumn("Typ awarii"),
                         "wynik_priorytet_operacyjny": st.column_config.SelectboxColumn("Priorytet", options=["P1", "P2", "P3", "P4"]),
                         "wynik_status_kwalifikacji": st.column_config.TextColumn("Kwalifikacja"),
-                        "wynik_czy_utworzyc_zadanie_planistyczne": None,
+                        RDM_RECOMMENDATION_COLUMN: st.column_config.TextColumn("Rekomendacja AI"),
+                        RDM_SELECTION_COLUMN: None,
                         "wynik_status_raportu": st.column_config.TextColumn("Status raportu"),
                         "wynik_rekomendowany_typ_zadania": st.column_config.TextColumn("Typ zadania"),
                         "wynik_wymagane_kompetencje": st.column_config.TextColumn("Kompetencje"),
@@ -2623,22 +2727,14 @@ elif active_page == "Rejestr Awarii":
 elif active_page == "Asystent":
     section_title("Asystent")
     st.write("Opcjonalny czat z LLM do pomocy przy obsłudze harmonogramu, awarii i dokumentacji.")
+    if st.session_state.get("llm_api_key"):
+        st.success(f"Asystent korzysta z globalnego klucza API aplikacji. Model: {st.session_state.get('llm_model', 'gpt-4o-mini')}.")
+    else:
+        st.warning("Klucz API LLM ustawiasz globalnie w lewym menu, w sekcji Ustawienia aplikacji.")
 
-    with st.expander("Konfiguracja LLM", expanded=not bool(st.session_state.get("llm_api_key"))):
-        st.session_state["llm_api_key"] = st.text_input(
-            "Klucz API",
-            value=st.session_state.get("llm_api_key", ""),
-            type="password",
-            help="Klucz jest przechowywany tylko w bieżącej sesji aplikacji.",
-        )
-        st.session_state["llm_model"] = st.text_input(
-            "Model",
-            value=st.session_state.get("llm_model", "gpt-4o-mini"),
-            help="Wpisz nazwę modelu dostępnego dla używanego klucza API.",
-        )
-        if st.button("Wyczyść rozmowę", use_container_width=True):
-            st.session_state["assistant_messages"] = []
-            st.rerun()
+    if st.button("Wyczyść rozmowę", use_container_width=True):
+        st.session_state["assistant_messages"] = []
+        st.rerun()
 
     if not st.session_state.get("assistant_messages"):
         st.session_state["assistant_messages"] = [
@@ -3030,7 +3126,8 @@ elif active_page == "Eksport":
             st.warning("Plik wynikowy nie jest jeszcze zapisany.")
         st.write("Można również pobrać dane tabelaryczne jako CSV:")
         if st.session_state["schedule_results"]["plan"] is not None:
-            st.download_button("Pobierz harmonogram CSV", st.session_state["schedule_results"]["plan"].to_csv(index=False).encode("utf-8"), "harmonogram.csv", "text/csv")
+            plan_csv_df = get_schedule_rows_for_display(st.session_state["schedule_results"]["plan"])
+            st.download_button("Pobierz harmonogram CSV", plan_csv_df.to_csv(index=False).encode("utf-8"), "harmonogram.csv", "text/csv")
         if st.session_state["schedule_results"]["unplanned"] is not None:
             st.download_button("Pobierz niezaplanowane CSV", st.session_state["schedule_results"]["unplanned"].to_csv(index=False).encode("utf-8"), "niezaplanowane.csv", "text/csv")
         if st.session_state["schedule_results"]["conflicts"] is not None:
